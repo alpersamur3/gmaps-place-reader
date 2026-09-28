@@ -1,0 +1,58 @@
+{
+  "name": "gmaps-place-reader",
+  "version": "0.1.0",
+  "description": "Read Google Maps places with a real browser: search results, business details, the full menu photo album (with photo dates), menu items and photos — no Places API key.",
+  "keywords": [
+    "google-maps",
+    "maps",
+    "places",
+    "restaurant",
+    "menu",
+    "scraper",
+    "puppeteer",
+    "headless-chrome",
+    "photos",
+    "reviews"
+  ],
+  "license": "MIT",
+  "author": "Alper Samur",
+  "homepage": "https://github.com/alpersamur3/gmaps-place-reader#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alpersamur3/gmaps-place-reader.git"
+  },
+  "bugs": {
+    "url": "https://github.com/alpersamur3/gmaps-place-reader/issues"
+  },
+  "type": "module",
+  "main": "./src/maps.js",
+  "exports": {
+    ".": "./src/maps.js",
+    "./media": "./src/media.js",
+    "./details": "./src/details.js",
+    "./cookies": "./src/cookies.js",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "gmaps-scan": "bin/scan.js",
+    "gmaps-place": "bin/place.js",
+    "gmaps-login": "bin/login.js"
+  },
+  "files": [
+    "src",
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test",
+    "scan": "node bin/scan.js",
+    "login": "node bin/login.js"
+  },
+  "dependencies": {
+    "puppeteer-core": "^24.0.0"
+  }
+}
