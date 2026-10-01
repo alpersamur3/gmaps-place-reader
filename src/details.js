@@ -162,13 +162,90 @@ function readDetailsDom() {
     ['streetAddress', 'addressLocality', 'addressRegion', 'postalCode', 'addressCountry'].map(key => clean(structured.address[key])).filter(Boolean).join(', ');
   if (!rating) rating = Number(String(structured.aggregateRating?.ratingValue || '').replace(',', '.')) || 0;
   if (!reviewCount) reviewCount = parseCount(structured.aggregateRating?.reviewCount || structured.aggregateRating?.ratingCount || '');
+  const descriptionNode = nodes('[data-item-id="description"], [aria-label^="Description:"], [aria-label^="Açıklama:"]')
+    .find(node => !generic.test(plain(node)));
+  const description = clean(structured.description || descriptionNode?.innerText || descriptionNode?.getAttribute('aria-label')
+    ?.replace(/^(?:description|açıklama)\s*:\s*/i, ''));
   const latitude = Number(structured.geo?.latitude), longitude = Number(structured.geo?.longitude);
   const geo = structured.geo?.latitude !== undefined && structured.geo?.longitude !== undefined && Number.isFinite(latitude) && Number.isFinite(longitude) && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180 ? { latitude, longitude } : {};
   const name = plain(heading);
-  return { data_status: 'ok', name, address, phone, website, menu_url: menuUrl, business_type: businessType,
+  return { data_status: 'ok', name, description, address, phone, website, menu_url: menuUrl, business_type: businessType,
     price_level: priceLevel || clean(structured.priceRange), rating: rating >= 0 && rating <= 5 ? rating : 0,
     review_count: reviewCount, rating_label: ratingLabel, review_label: reviewLabel, opening_hours: openingHours,
     opening_hours_rows: openingHoursRows, ...geo };
+}
+
+/** Open Maps' About tab for the description and categorized business attributes. */
+export async function extractAboutDetails(page) {
+  const opened = await page.evaluate(() => {
+    const normalize = value => String(value || '').trim().toLocaleLowerCase('tr').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ı/g, 'i');
+    const tabs = [...document.querySelectorAll('[role="tab"]')];
+    const tablist = tabs.find(tab => {
+      const list = tab.closest('[role="tablist"]');
+      const names = [...(list?.querySelectorAll('[role="tab"]') || [])].map(item => normalize(item.textContent));
+      return names.some(name => /^(?:genel bakis|overview)$/.test(name)) && names.some(name => /^(?:yorumlar|reviews)$/.test(name));
+    })?.closest('[role="tablist"]');
+    const tab = [...(tablist?.querySelectorAll('[role="tab"]') || [])].find(item => /^(?:hakkinda|about)$/.test(normalize(item.textContent)));
+    if (!tab) return false;
+    if (tab.getAttribute('aria-selected') !== 'true') tab.click();
+    return true;
+  });
+  if (!opened) return { status: 'unavailable', description: '', attributes: [] };
+  await page.waitForFunction(() => [...document.querySelectorAll('[role="region"]')].some(region =>
+    region.getClientRects().length && /about|hakkında/i.test(region.getAttribute('aria-label') || '')), { timeout: 5000 }).catch(() => {});
+  const allAttributes = new Map();
+  let description = '', exhausted = false, status = 'ok';
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const pageData = await page.evaluate(() => {
+    const clean = value => String(value || '').replace(/\s+/g, ' ').trim();
+    const visible = node => !!node && !!node.getClientRects().length && getComputedStyle(node).visibility !== 'hidden';
+    const region = [...document.querySelectorAll('[role="region"]')].find(item => visible(item) && /about|hakkında/i.test(item.getAttribute('aria-label') || ''));
+    if (!region) return { status: 'unavailable', description: '', attributes: [] };
+    const attributes = [];
+    let description = '';
+    for (const heading of region.querySelectorAll('h2, [role="heading"]')) {
+      if (!visible(heading)) continue;
+      const category = clean(heading.innerText || heading.textContent);
+      const content = heading.nextElementSibling;
+      if (!content || !visible(content)) continue;
+      if (/description|açıklama|from the business|işletme açıklaması|işletmeden/i.test(category)) {
+        description ||= clean(content.innerText || content.textContent);
+        continue;
+      }
+      for (const row of content.querySelectorAll('li')) {
+        if (!visible(row)) continue;
+        const labelNode = row.querySelector('[aria-label]');
+        const label = clean(labelNode?.getAttribute('aria-label') || row.innerText);
+        const name = clean(labelNode?.innerText || row.innerText);
+        if (!name) continue;
+        // The About tab lists attributes that apply, plus explicit negatives ("… yok", "No …", "… değil").
+        const negative = /(?:^|\s)(?:yok|yoktur|değil|etmiyor|sunmuyor|vermiyor|bulunmuyor|olmuyor)(?:\s|$)|^(?:no|not)\s|\b(?:not available|does not|doesn't|doesn’t)\b/i.test(label);
+        attributes.push({ category, name, label, available: label ? !negative : null });
+      }
+    }
+    return { status: 'ok', description, attributes };
+  });
+    if (pageData.status !== 'ok') { status = pageData.status; exhausted = true; break; }
+    description ||= pageData.description || '';
+    for (const row of pageData.attributes || []) allAttributes.set(JSON.stringify([row.category, row.name, row.label]), row);
+    const moved = await page.evaluate(() => {
+      const region = [...document.querySelectorAll('[role="region"]')].find(item =>
+        item.getClientRects().length && /about|hakkında/i.test(item.getAttribute('aria-label') || ''));
+      let node = region, scroller = null;
+      while (node && node !== document.body) {
+        const style = getComputedStyle(node);
+        if (node.clientHeight > 100 && node.scrollHeight > node.clientHeight + 4 && /auto|scroll/.test(style.overflowY)) { scroller = node; break; }
+        node = node.parentElement;
+      }
+      if (!scroller) return false;
+      const before = scroller.scrollTop;
+      scroller.scrollBy(0, Math.max(250, Math.round(scroller.clientHeight * 0.82)));
+      return scroller.scrollTop > before;
+    });
+    if (!moved) { exhausted = true; break; }
+    await new Promise(resolve => setTimeout(resolve, 220));
+  }
+  return { status, description, attributes: [...allAttributes.values()], truncated: !exhausted };
 }
 
 export async function extractPlaceDetails(page, { expandHours = true } = {}) {

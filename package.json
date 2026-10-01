@@ -1,7 +1,7 @@
 {
   "name": "gmaps-place-reader",
-  "version": "0.1.0",
-  "description": "Read Google Maps places with a real browser: search results, business details, the full menu photo album (with photo dates), menu items and photos — no Places API key.",
+  "version": "0.2.0",
+  "description": "Read Google Maps places by URL: business details, menu items and photos, galleries, and dated reviews with Puppeteer.",
   "keywords": [
     "google-maps",
     "maps",
@@ -30,13 +30,15 @@
     ".": "./src/maps.js",
     "./media": "./src/media.js",
     "./details": "./src/details.js",
+    "./reviews": "./src/reviews.js",
     "./cookies": "./src/cookies.js",
     "./package.json": "./package.json"
   },
   "bin": {
     "gmaps-scan": "bin/scan.js",
     "gmaps-place": "bin/place.js",
-    "gmaps-login": "bin/login.js"
+    "gmaps-login": "bin/login.js",
+    "gmaps-session": "bin/session.js"
   },
   "files": [
     "src",

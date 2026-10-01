@@ -1,7 +1,7 @@
 import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { launchBrowser } from '../src/maps.js';
-import { extractPlaceDetails, pageStatus, placeMetadata } from '../src/details.js';
+import { extractPlaceDetails, extractAboutDetails, pageStatus, placeMetadata } from '../src/details.js';
 
 let browser;
 before(async () => { browser = await launchBrowser(); });
@@ -14,6 +14,27 @@ async function fixture(html, run) {
     return await run(page);
   } finally { await page.close(); }
 }
+
+test('About tab returns categorized business attributes and an available description', async () => {
+  await fixture(`<main role="main"><div role="tablist">
+    <button role="tab">Genel Bakış</button><button role="tab">Yorumlar</button><button role="tab" id="about">Hakkında</button>
+    </div><section role="region" aria-label="Test Cafe hakkında" hidden>
+      <h2>Hizmet seçenekleri</h2><ul><li><span aria-label="Açık hava bölümü var">Açık hava bölümü</span></li>
+      <li><span aria-label="Paket servis hizmeti yok">Adrese servis</span></li>
+      <li><span aria-label="İçeride yemek servisi veriyor">İçeride servis</span></li></ul>
+      <h2>Atmosfer</h2><ul><li><span aria-label="Rahat">Rahat</span></li></ul>
+      <h2>Planlama</h2><ul><li><span aria-label="Rezervasyon kabul etmiyor">Rezervasyon</span></li></ul>
+      <h2>Açıklama</h2><p>Deniz manzaralı aile işletmesi.</p>
+    </section><script>document.querySelector('#about').onclick=()=>document.querySelector('[role=region]').hidden=false;</script></main>`, async page => {
+    const result = await extractAboutDetails(page);
+    assert.equal(result.status, 'ok');
+    assert.equal(result.description, 'Deniz manzaralı aile işletmesi.');
+    assert.deepEqual(result.attributes.map(row => [row.category,row.name,row.available]), [
+      ['Hizmet seçenekleri','Açık hava bölümü',true], ['Hizmet seçenekleri','Adrese servis',false],
+      ['Hizmet seçenekleri','İçeride servis',true], ['Atmosfer','Rahat',true], ['Planlama','Rezervasyon',false]
+    ]);
+  });
+});
 
 test('extracts Turkish details from the place panel, excluding generic Maps heading', async () => {
   await fixture(`<h1>Google Maps</h1><div role="main"><h1 class="DUwDvf">Örnek Lokanta</h1>

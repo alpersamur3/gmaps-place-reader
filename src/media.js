@@ -215,6 +215,33 @@ async function openMenuCategory(page) {
   return 'ok';
 }
 
+/** Prefer the 1/N album exposed directly on the business Menu tab. */
+async function openMenuTabAlbum(page) {
+  if (!await clickControl(page, 'mainMenu')) return { opened: false, expected_images: 0 };
+  const handle = await page.evaluateHandle(() => {
+    const region = [...document.querySelectorAll('[role="region"]')].find(item => /^(?:menü|menu)$/i.test(item.getAttribute('aria-label') || ''));
+    if (!region) return null;
+    const buttons = [...region.querySelectorAll('button[aria-label]')];
+    const first = buttons.find(button => /^(?:fotoğraf|photo)\s+1\/(\d+)$/i.test(button.getAttribute('aria-label') || ''));
+    const count = Math.max(0, ...buttons.map(button => Number((button.getAttribute('aria-label') || '').match(/^(?:fotoğraf|photo)\s+\d+\/(\d+)$/i)?.[1]) || 0));
+    return first ? { button: first, count } : null;
+  });
+  try {
+    const value = await handle.jsonValue().catch(() => null);
+    const button = await page.evaluateHandle(() => {
+      const region = [...document.querySelectorAll('[role="region"]')].find(item => /^(?:menü|menu)$/i.test(item.getAttribute('aria-label') || ''));
+      return [...(region?.querySelectorAll('button[aria-label]') || [])].find(item => /^(?:fotoğraf|photo)\s+1\/\d+$/i.test(item.getAttribute('aria-label') || '')) || null;
+    });
+    try {
+      const first = button.asElement();
+      if (!first) return { opened: false, expected_images: value?.count || 0 };
+      await first.click();
+      const opened = await page.waitForFunction(() => /!1e2!3m6!1s[\w-]+!2e10!3e12!6s/i.test(location.href), { timeout: 7000 }).then(() => true, () => false);
+      return { opened, expected_images: value?.count || 0 };
+    } finally { await button.dispose(); }
+  } finally { await handle.dispose(); }
+}
+
 /**
  * Walks the open photo viewer with its "next" control. Stops when a photo repeats (the viewer
  * wrapped around) or the control disappears; a stalled viewer is reported as truncated.
@@ -261,6 +288,12 @@ async function walkViewer(page, { maxImages, waitMs = 350, timeoutMs = 45000 }) 
 /** Menu photos in Google's order with original size and month, via the gallery's Menu category. */
 export async function readMenuPhotos(page, { overviewUrl = '', maxImages = 20, waitMs = 350 } = {}) {
   maxImages = bounded(maxImages, 20);
+  const direct = await openMenuTabAlbum(page);
+  if (direct.opened) {
+    const walk = await walkViewer(page, { maxImages, waitMs });
+    return { status: walk.images.length ? 'found' : 'empty', source: 'menu_tab', expected_images: direct.expected_images,
+      images: walk.images, truncated: !walk.ended };
+  }
   let reason = 'PHOTO_GALLERY_NOT_EXPOSED';
   for (let attempt = 0; attempt < 3; attempt++) {
     if (overviewUrl && (attempt || !await heroVisible(page))) await openOverview(page, overviewUrl);
@@ -328,9 +361,9 @@ export async function readMenu(page, { maxCategories = 50, maxImages = 20, maxSc
     return { status: 'unavailable', reason: status === 'ok' ? album.reason : status.toUpperCase(),
       categories: [], images: [], items: [], expected_images: 0, coverage_complete: false, truncated: false };
   }
-  return { status: found ? 'found' : 'empty', source: album.images.length ? 'photo_viewer' : tab.opened ? 'menu_tab' : 'none',
+  return { status: found ? 'found' : 'empty', source: album.images.length ? (album.source || 'photo_viewer') : tab.opened ? 'menu_tab' : 'none',
     categories: tab.categories, images: [...images.values()].slice(0, maxImages), items: tab.items,
-    expected_images: tab.expected_images, reason: album.reason,
+    expected_images: Math.max(tab.expected_images, album.expected_images || 0), reason: album.reason,
     coverage_complete: album.status === 'found' && !album.truncated && (!tab.opened || (tab.exhausted && !tab.truncated)) && status === 'ok',
     truncated: album.truncated || tab.truncated };
 }

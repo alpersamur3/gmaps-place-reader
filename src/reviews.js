@@ -1,0 +1,367 @@
+import { pageStatus } from './details.js';
+
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+const DAY = 86400000;
+const UNIT_DAYS = { minute: 1 / 1440, hour: 1 / 24, day: 1, week: 7, month: 30.44, year: 365.25 };
+const SORT_LABELS = {
+  relevant: /^(?:en alakalı|most relevant)/i,
+  newest: /^(?:en yeni|newest)/i,
+  highest: /^(?:en yüksek|highest)/i,
+  lowest: /^(?:en düşük|lowest)/i,
+};
+
+/** Build the same Reviews deep link Google creates when a user opens the tab. */
+export function reviewsPageUrl(value) {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || !['www.google.com', 'google.com', 'maps.google.com'].includes(url.hostname) || !url.pathname.startsWith('/maps/')) return '';
+    if (/!9m1!1b1/.test(url.pathname)) return url.toString();
+    const marker = url.pathname.indexOf('/data=');
+    if (marker < 0) return '';
+    const before = url.pathname.slice(0, marker + 6), data = url.pathname.slice(marker + 6);
+    const id = data.indexOf('!16s') >= 0 ? '!16s' : data.indexOf('!19s') >= 0 ? '!19s' : '';
+    if (!id) return '';
+    url.pathname = `${before}${data.replace(id, `!9m1!1b1${id}`)}`;
+    return url.toString();
+  } catch { return ''; }
+}
+
+/**
+ * Parse Google's relative review age ("2 ay önce", "bir yıl önce düzenlendi", "3 weeks ago", "Edited a month ago").
+ * Returns { amount, unit, edited } or null. Google rounds down: "2 ay önce" means 2 to 3 months old.
+ */
+export function parseRelativeAge(label) {
+  const text = String(label || '').toLocaleLowerCase('tr').replace(/\s+/g, ' ').trim();
+  const edited = /düzenlendi|edited/.test(text);
+  const match = text.match(/(\d+|bir|an?|one)\s*(dakika|saat|gün|hafta|ay|yıl|minutes?|hours?|days?|weeks?|months?|years?)\s*(?:önce|ago)/);
+  if (!match) return /^(?:dün|yesterday)/.test(text) ? { amount: 1, unit: 'day', edited } : null;
+  const amount = /^\d+$/.test(match[1]) ? Number(match[1]) : 1;
+  const unit = { dakika: 'minute', saat: 'hour', gün: 'day', hafta: 'week', ay: 'month', yıl: 'year' }[match[2]] ||
+    match[2].replace(/s$/, '');
+  return UNIT_DAYS[unit] ? { amount, unit, edited } : null;
+}
+
+/** Approximate calendar date of a relative label (most recent possible day), YYYY-MM-DD. */
+export function estimateReviewDate(label, observedAt = Date.now()) {
+  const age = parseRelativeAge(label);
+  if (!age) return null;
+  const date = new Date(observedAt - age.amount * UNIT_DAYS[age.unit] * DAY);
+  return { date: date.toISOString().slice(0, 10), precision: age.unit, edited: age.edited };
+}
+
+/** An exact timestamp is accepted only when it agrees with the label Google shows next to the review. */
+export function exactDateMatchesLabel(timestampMs, label, observedAt = Date.now()) {
+  const age = parseRelativeAge(label);
+  if (!age || !Number.isFinite(timestampMs)) return false;
+  const days = (observedAt - timestampMs) / DAY, unitDays = UNIT_DAYS[age.unit];
+  const lower = Math.max(0, age.amount * unitDays * 0.85 - 2), upper = (age.amount + 1) * unitDays * 1.15 + 2;
+  // An edited review shows the edit age; the original post can be older than that.
+  return age.edited ? days >= lower - 2 : days >= lower && days <= upper;
+}
+
+/**
+ * Exact posting time per review from Google's own responses: the first plausible epoch timestamp
+ * (milliseconds or microseconds) after the review id, before the next review id appears.
+ */
+export function reviewTimestampsFromText(text, reviewIds, now = Date.now()) {
+  const positions = [];
+  for (const id of reviewIds) {
+    if (!id) continue;
+    let at = text.indexOf(id);
+    while (at >= 0) { positions.push([at, id]); at = text.indexOf(id, at + id.length); }
+  }
+  positions.sort((a, b) => a[0] - b[0]);
+  const found = new Map();
+  for (let index = 0; index < positions.length; index++) {
+    const [at, id] = positions[index];
+    if (found.has(id)) continue;
+    let end = Math.min(text.length, at + 6000);
+    for (let next = index + 1; next < positions.length; next++) {
+      if (positions[next][1] !== id) { end = Math.min(end, positions[next][0]); break; }
+    }
+    for (const match of text.slice(at + id.length, end).matchAll(/(?<!\d)(1\d{12}|1\d{15})(?!\d)/g)) {
+      const value = Number(match[1]);
+      const ms = match[1].length === 16 ? Math.floor(value / 1000) : value;
+      if (ms > Date.UTC(2005, 0, 1) && ms < now + DAY) { found.set(id, ms); break; }
+    }
+  }
+  return found;
+}
+
+function readReviewCardsDom() {
+  const clean = value => String(value || '').replace(/\s+/g, ' ').trim();
+  const cards = [...document.querySelectorAll('.jftiEf[data-review-id]')].filter(card => card.getClientRects().length);
+  const parseAbsoluteDate = raw => {
+    if (!raw) return '';
+    const value = String(raw).trim();
+    if (/^\d{10,13}$/.test(value)) {
+      const number = Number(value);
+      const date = new Date(value.length === 10 ? number * 1000 : number);
+      return Number.isNaN(date.getTime()) ? '' : date.toISOString();
+    }
+    if (!/^\d{4}-\d{2}-\d{2}(?:[T ]|$)/.test(value)) return '';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '' : date.toISOString();
+  };
+  return cards.map(card => {
+    const reviewId = clean(card.getAttribute('data-review-id'));
+    const dateNode = card.querySelector('.rsqaWe, [data-review-date], time[datetime]');
+    const dateLabel = clean(dateNode?.innerText || dateNode?.textContent);
+    const explicitDate = [dateNode?.getAttribute('datetime'), dateNode?.getAttribute('data-review-date'),
+      dateNode?.getAttribute('data-timestamp'), dateNode?.getAttribute('title'),
+      dateNode?.parentElement?.getAttribute('datetime'), dateNode?.parentElement?.getAttribute('data-review-date'),
+      dateNode?.parentElement?.getAttribute('title')].map(parseAbsoluteDate).find(Boolean) || '';
+    const ratingNode = card.querySelector('[role="img"][aria-label]');
+    const ratingLabel = clean(ratingNode?.getAttribute('aria-label'));
+    const rating = Number(ratingLabel.match(/([1-5])\s*(?:yıldız|stars?)/i)?.[1]) || 0;
+    const bodyNode = card.querySelector('.wiI7pd');
+    const body = clean(bodyNode?.innerText || bodyNode?.textContent)
+      .replace(/\s+(?:Daha fazla|Diğer|More)$/i, '').replace(/\s*…\s*$/u, '').trim();
+    const author = clean(card.querySelector('.d4r55')?.innerText || card.getAttribute('aria-label'));
+    const authorDetails = clean(card.querySelector('.RfnDt')?.innerText || '');
+    const profileButton = [...card.querySelectorAll('button[aria-label]')].find(button =>
+      /yorum|review/i.test(button.getAttribute('aria-label') || '') &&
+      !/işlemler|actions|paylaş|share|fotoğraf|photo/i.test(button.getAttribute('aria-label') || ''));
+    const authorSummary = clean(profileButton?.innerText || authorDetails);
+    const replyNode = card.querySelector('.CDe7pd, [aria-label*="business reply" i], [aria-label*="işletme yanıtı" i]');
+    const reactionButton = [...card.querySelectorAll('button[aria-label], [role="button"][aria-label]')]
+      .find(button => /(?:like|beğenme)/i.test(button.getAttribute('aria-label') || ''));
+    const likes = Number((reactionButton?.getAttribute('aria-label') || '').match(/\d+/)?.[0]) || 0;
+    // Photos attached to the review (background images on photo buttons).
+    const photos = [...card.querySelectorAll('button[style*="background-image"], [data-photo-index][style*="background-image"]')]
+      .map(node => (getComputedStyle(node).backgroundImage.match(/url\("?(https:[^")]+)"?\)/) || [])[1]).filter(Boolean);
+    const translated = [...card.querySelectorAll('button, span')].some(node =>
+      /^(?:orijinali göster|show original|google tarafından çevrildi|translated by google)/i.test(clean(node.innerText)));
+    return {
+      review_id: reviewId,
+      author,
+      author_summary: authorSummary,
+      rating,
+      rating_label: ratingLabel,
+      date_label: dateLabel,
+      date_iso: explicitDate,
+      date_precision: explicitDate ? 'day' : (dateLabel ? 'relative' : 'unknown'),
+      edited: /düzenlendi|edited/i.test(dateLabel),
+      text: body,
+      translated,
+      photos: [...new Set(photos)].slice(0, 20),
+      owner_response: clean(replyNode?.innerText || ''),
+      likes,
+      language: bodyNode?.getAttribute('lang') || ''
+    };
+  }).filter(row => row.review_id && (row.text || row.rating));
+}
+
+async function openReviewsTab(page) {
+  return page.evaluate(() => {
+    const normalize = value => String(value || '').trim().toLocaleLowerCase('tr').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ı/g, 'i');
+    const tabs = [...document.querySelectorAll('[role="tab"]')].filter(tab => tab.getClientRects().length);
+    const tablist = tabs.find(tab => {
+      const list = tab.closest('[role="tablist"]');
+      if (!list) return false;
+      const names = [...list.querySelectorAll('[role="tab"]')].map(item => normalize(item.textContent));
+      return names.some(name => /^(?:genel bakis|overview)$/.test(name)) &&
+        names.some(name => /^(?:hakkinda|about)$/.test(name));
+    })?.closest('[role="tablist"]');
+    if (!tablist) return false;
+    const tab = [...tablist.querySelectorAll('[role="tab"]')].find(item => /^(?:yorumlar|reviews)$/.test(normalize(item.textContent)));
+    if (!tab) return false;
+    if (tab.getAttribute('aria-selected') !== 'true') tab.click();
+    return true;
+  });
+}
+
+/**
+ * The Overview tab also shows a few review snippets with the same card markup. The real list is
+ * only ready once the Reviews tab is selected and its own controls (search box / sort menu) render.
+ */
+async function waitForReviewList(page, timeout) {
+  return page.waitForFunction(() => {
+    const visible = node => !!node && node.getClientRects().length > 0;
+    const controls = [...document.querySelectorAll('input, button')].some(node => visible(node) &&
+      /^(?:yorumlarda ara|search reviews|en alakalı|en yeni|en yüksek|en düşük|most relevant|newest|highest|lowest)/i.test(
+        (node.getAttribute('aria-label') || node.getAttribute('placeholder') || node.innerText || '').trim()));
+    const cards = document.querySelectorAll('.jftiEf[data-review-id]').length;
+    const empty = /no reviews|henüz yorum yok|yorum bulunamadı/i.test(document.body?.innerText || '');
+    return controls && (cards > 0 || empty);
+  }, { timeout }).then(() => true, () => false);
+}
+
+/** Choose a review order from Google's sort menu; returns the label shown afterwards ('' when not possible). */
+async function applySort(page, sort) {
+  const target = SORT_LABELS[sort];
+  if (!target) return '';
+  const current = await page.evaluate(source => {
+    const labels = new RegExp(source, 'i');
+    return [...document.querySelectorAll('button')].filter(node => node.getClientRects().length)
+      .map(node => (node.innerText || node.getAttribute('aria-label') || '').split(String.fromCharCode(10))[0].trim()).find(text => labels.test(text)) || '';
+  }, Object.values(SORT_LABELS).map(regex => regex.source).join('|'));
+  if (!current) return '';
+  if (target.test(current)) return current;
+  const before = await page.evaluate(() => document.querySelector('.jftiEf[data-review-id]')?.getAttribute('data-review-id') || '');
+  const opened = await page.evaluate(source => {
+    const labels = new RegExp(source, 'i');
+    const button = [...document.querySelectorAll('button')].find(node => node.getClientRects().length &&
+      labels.test((node.innerText || node.getAttribute('aria-label') || '').trim()));
+    button?.click();
+    return !!button;
+  }, Object.values(SORT_LABELS).map(regex => regex.source).join('|'));
+  if (!opened) return current;
+  await page.waitForFunction(() => document.querySelector('[role="menuitemradio"], [role="menuitem"]'), { timeout: 4000 }).catch(() => {});
+  const picked = await page.evaluate(source => {
+    const label = new RegExp(source, 'i');
+    const item = [...document.querySelectorAll('[role="menuitemradio"], [role="menuitem"]')].find(node => label.test((node.innerText || '').trim()));
+    item?.click();
+    return !!item;
+  }, target.source);
+  if (!picked) { await page.keyboard.press('Escape').catch(() => {}); return current; }
+  await page.waitForFunction(first => {
+    const now = document.querySelector('.jftiEf[data-review-id]')?.getAttribute('data-review-id') || '';
+    return now && now !== first;
+  }, { timeout: 8000 }, before).catch(() => {});
+  await sleep(400);
+  return page.evaluate(source => {
+    const labels = new RegExp(source, 'i');
+    return [...document.querySelectorAll('button')].filter(node => node.getClientRects().length)
+      .map(node => (node.innerText || node.getAttribute('aria-label') || '').split(String.fromCharCode(10))[0].trim()).find(text => labels.test(text)) || '';
+  }, Object.values(SORT_LABELS).map(regex => regex.source).join('|'));
+}
+
+async function expandReviewText(page) {
+  const ids = await page.evaluate(() => [...document.querySelectorAll('.jftiEf[data-review-id]')]
+    .filter(card => card.getClientRects().length)
+    .filter(card => [...card.querySelectorAll('button[aria-label]')].some(button =>
+      /^(?:daha fazla göster|daha fazla|diğer|more|see more)$/i.test((button.getAttribute('aria-label') || '').trim()) &&
+      button.getAttribute('aria-expanded') !== 'true'))
+    .map(card => card.getAttribute('data-review-id')).filter(Boolean));
+  for (const id of ids) {
+    await page.evaluate(id => {
+      const card = [...document.querySelectorAll('.jftiEf[data-review-id]')].find(item => item.getAttribute('data-review-id') === id);
+      const button = [...(card?.querySelectorAll('button[aria-label]') || [])].find(item =>
+        /^(?:daha fazla göster|daha fazla|diğer|more|see more)$/i.test((item.getAttribute('aria-label') || '').trim()));
+      button?.click();
+    }, id);
+  }
+  if (ids.length) await sleep(180);
+  return ids.length;
+}
+
+/**
+ * Google loads the next page of reviews only when the end of the list is reached: jump to the bottom
+ * of the review list's own scroller and wait until more cards appear (or the wait runs out).
+ */
+async function loadMoreReviews(page, waitMs) {
+  const before = await page.evaluate(() => {
+    const cards = document.querySelectorAll('.jftiEf[data-review-id]');
+    const last = cards[cards.length - 1];
+    let node = last?.parentElement, scroller = null;
+    while (node && node !== document.body) {
+      const style = getComputedStyle(node);
+      if (node.clientHeight > 100 && node.scrollHeight > node.clientHeight + 4 && /auto|scroll/.test(style.overflowY)) { scroller = node; break; }
+      node = node.parentElement;
+    }
+    if (!scroller) return { scroller: false, count: cards.length };
+    scroller.scrollTop = scroller.scrollHeight;
+    return { scroller: true, count: cards.length };
+  });
+  if (!before.scroller) return { scroller: false, grew: false };
+  const grew = await page.waitForFunction(count => document.querySelectorAll('.jftiEf[data-review-id]').length > count,
+    { timeout: waitMs * 4 }, before.count).then(() => true, () => false);
+  return { scroller: true, grew };
+}
+
+/** Read Google Maps reviews: full text, rating, author, exact date when Google sends it, owner reply. */
+export async function readReviews(page, options = {}) {
+  const bodies = []; let stored = 0;
+  const onResponse = async response => {
+    try {
+      const type = response.request().resourceType();
+      if (!['xhr', 'fetch', 'document'].includes(type) || stored > 80 * 1024 * 1024) return;
+      const text = await response.text();
+      if (text.length > 8 * 1024 * 1024 || !/data-review-id|Ch[A-Za-z0-9_-]{20}|\d{13}/.test(text)) return;
+      bodies.push(text); stored += text.length;
+    } catch { /* bodies of redirects or aborted requests are unavailable */ }
+  };
+  page.on('response', onResponse);
+  try {
+    const result = await collectReviews(page, options);
+    if (result.reviews.length) {
+      const observedAt = Date.now();
+      const stamps = reviewTimestampsFromText(bodies.join('\n'), result.reviews.map(row => row.review_id), observedAt);
+      for (const row of result.reviews) {
+        const exact = stamps.get(row.review_id);
+        if (!row.date_iso && exact && exactDateMatchesLabel(exact, row.date_label, observedAt)) {
+          row.date_iso = new Date(exact).toISOString();
+          row.date_precision = 'exact';
+        }
+        const estimate = estimateReviewDate(row.date_label, observedAt);
+        row.date_estimate = row.date_iso ? row.date_iso.slice(0, 10) : estimate?.date || '';
+        if (!row.date_iso && estimate) row.date_precision = estimate.precision;
+      }
+      result.exact_dates = result.reviews.filter(row => row.date_precision === 'exact').length;
+    }
+    return result;
+  } finally { page.off('response', onResponse); }
+}
+
+async function collectReviews(page, { overviewUrl = '', reviewCount = 0, maxReviews = 100, maxScrolls = 25, waitMs = 650,
+  sort = 'relevant', listTimeoutMs = 15000, onProgress } = {}) {
+  maxReviews = Math.max(1, Math.min(10000, Math.floor(Number(maxReviews) || 100)));
+  maxScrolls = Math.max(1, Math.min(1000, Math.floor(Number(maxScrolls) || 25)));
+  waitMs = Math.max(100, Math.min(3000, Math.floor(Number(waitMs) || 650)));
+  let opened = await openReviewsTab(page);
+  if (!opened && overviewUrl) {
+    await page.goto(overviewUrl, { waitUntil: 'domcontentloaded', timeout: 25000 }).catch(() => {});
+    await page.waitForFunction(() => !!document.querySelector('[role="tab"]'), { timeout: 10000 }).catch(() => {});
+    opened = await openReviewsTab(page);
+  }
+  let loaded = opened && await waitForReviewList(page, listTimeoutMs);
+  // Some sessions hide the Reviews tab but still open Google's own review deep link.
+  if (!loaded && overviewUrl && reviewsPageUrl(overviewUrl)) {
+    await page.goto(reviewsPageUrl(overviewUrl), { waitUntil: 'domcontentloaded', timeout: 25000 }).catch(() => {});
+    loaded = await waitForReviewList(page, Math.min(listTimeoutMs, 10000));
+  }
+  if (!loaded) {
+    const currentStatus = await pageStatus(page).catch(() => 'unavailable');
+    const explicitlyEmpty = await page.evaluate(() => /no reviews|henüz yorum yok|yorum bulunamadı/i.test(document.body?.innerText || '')).catch(() => false);
+    const available = currentStatus === 'ok' && explicitlyEmpty;
+    const result = { status: available ? 'empty' : 'unavailable', reviews: [], total_count: reviewCount || 0,
+      collected_count: 0, requested_limit: maxReviews, truncated: !available, coverage_complete: available,
+      reason: currentStatus !== 'ok' ? currentStatus.toUpperCase() : explicitlyEmpty ? '' : opened ? 'REVIEW_CARDS_NOT_LOADED' : 'REVIEW_TAB_NOT_FOUND' };
+    if (onProgress) await onProgress({ stage: 'reviews', ...result }, page);
+    return result;
+  }
+  const sortLabel = sort === 'relevant' ? '' : await applySort(page, sort);
+
+  const reviews = new Map();
+  let exhausted = false, limitReached = false, scrolls = 0, stalled = 0;
+  for (let attempt = 0; attempt <= maxScrolls; attempt++) {
+    await expandReviewText(page);
+    for (const row of await page.evaluate(readReviewCardsDom)) reviews.set(row.review_id, row);
+    if (onProgress) await onProgress({ stage: 'reviews', collected: reviews.size, total: reviewCount || null }, page);
+    if (reviews.size >= maxReviews) { limitReached = true; break; }
+    if (reviewCount && reviews.size >= reviewCount) { exhausted = true; break; }
+    if (attempt === maxScrolls) break;
+    const step = await loadMoreReviews(page, waitMs);
+    if (!step.scroller) { exhausted = true; break; }
+    scrolls++;
+    stalled = step.grew ? 0 : stalled + 1;
+    // Three end-of-list waits in a row without new cards: Google has nothing more to send.
+    if (stalled >= 3) { exhausted = true; break; }
+  }
+  await expandReviewText(page);
+  for (const row of await page.evaluate(readReviewCardsDom)) reviews.set(row.review_id, row);
+
+  const rows = [...reviews.values()].slice(0, maxReviews);
+  const finalSort = sortLabel || await page.evaluate(source => {
+    const labels = new RegExp(source, 'i');
+    return [...document.querySelectorAll('button')].filter(node => node.getClientRects().length)
+      .map(node => (node.innerText || node.getAttribute('aria-label') || '').split(String.fromCharCode(10))[0].trim()).find(text => labels.test(text)) || '';
+  }, Object.values(SORT_LABELS).map(regex => regex.source).join('|'));
+  const knownTotal = Math.max(0, Number(reviewCount) || 0);
+  const knownComplete = knownTotal > 0 && rows.length >= knownTotal;
+  const truncated = !knownComplete && (limitReached || !exhausted || knownTotal > rows.length);
+  return { status: rows.length ? 'found' : 'empty', reviews: rows, total_count: knownTotal,
+    collected_count: rows.length, requested_limit: maxReviews, scrolls, sort_label: finalSort,
+    truncated, coverage_complete: rows.length > 0 && (knownComplete || (exhausted && !knownTotal)) };
+}

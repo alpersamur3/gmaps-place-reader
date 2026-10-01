@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { imageUrl, fullImageUrl, placeIdentity, toObservation, launchBrowser, newMapsPage, readMenu, readPhotos, passConsent } from '../src/maps.js';
+import { normalizePlaceUrl, imageUrl, fullImageUrl, placeIdentity, toObservation, launchBrowser, newMapsPage, readMenu, readPhotos, passConsent } from '../src/maps.js';
 
 test('headless Maps page uses the installed Chrome desktop user agent', async () => {
   const browser = await launchBrowser();
@@ -101,4 +101,16 @@ test('EU consent page: only "reject all" is chosen, then Google returns to Maps'
       assert.equal(await passConsent(page), false);
     } finally { await page.close(); }
   } finally { await browser.close(); }
+});
+
+test('place links: country domains, ?cid= and short links are accepted; other hosts are not', () => {
+  assert.equal(normalizePlaceUrl('https://www.google.com.tr/maps/place/Cafe/data=!4m2!3m1!1s0x1:0x2'),
+    'https://www.google.com/maps/place/Cafe/data=!4m2!3m1!1s0x1:0x2?hl=tr');
+  assert.equal(normalizePlaceUrl('https://www.google.com/maps?cid=5682962314133110183'), 'https://www.google.com/maps?cid=5682962314133110183&hl=tr');
+  assert.equal(normalizePlaceUrl('https://maps.google.com/?cid=5682962314133110183&hl=en'), 'https://www.google.com/maps?cid=5682962314133110183&hl=tr',
+    'the UI language is always Turkish, whatever the link or account says');
+  assert.equal(normalizePlaceUrl('https://maps.app.goo.gl/AbCdEf123'), 'https://maps.app.goo.gl/AbCdEf123');
+  assert.equal(normalizePlaceUrl('https://www.google.com/search?q=cafe'), '');
+  assert.equal(normalizePlaceUrl('https://google.evil.com/maps/place/x'), '');
+  assert.equal(normalizePlaceUrl('http://www.google.com/maps/place/x'), '');
 });

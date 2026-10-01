@@ -2,9 +2,11 @@ import puppeteer from 'puppeteer-core';
 import crypto from 'node:crypto';
 import path from 'node:path';
 import { loadGoogleCookies, applyBrowserCookies } from './cookies.js';
-import { extractPlaceDetails, pageStatus } from './details.js';
+import { extractPlaceDetails, extractAboutDetails, pageStatus } from './details.js';
+import { readReviews, reviewsPageUrl } from './reviews.js';
 import { imageUrl, fullImageUrl, imageIdentity, readMenu, readMenuPhotos, readPhotos, viewerPhoto, photoMonth } from './media.js';
-export { pageStatus, imageUrl, fullImageUrl, readMenu, readMenuPhotos, readPhotos, viewerPhoto, photoMonth };
+export { pageStatus, imageUrl, fullImageUrl, readMenu, readMenuPhotos, readPhotos, readReviews, reviewsPageUrl, viewerPhoto, photoMonth };
+export { parseRelativeAge, estimateReviewDate } from './reviews.js';
 
 const MAPS = 'https://www.google.com/maps';
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -25,20 +27,60 @@ export function placeIdentity(url) {
   catch { return ''; }
 }
 
+const GOOGLE_HOST = /^(?:www\.|maps\.)?google\.(?:com|[a-z]{2}|co\.[a-z]{2}|com\.[a-z]{2})$/;
+
+/**
+ * Accepts Maps place/search links and ?cid= links on any Google country domain (google.com.tr, maps.google.de …).
+ * The host is normalised to www.google.com: Google session cookies are set for .google.com only.
+ */
 function safeMapsUrl(value) {
   try {
     const url = new URL(value);
     if (url.protocol !== 'https:' || url.username || url.password || (url.port && url.port !== '443') ||
-      !['www.google.com', 'google.com', 'maps.google.com'].includes(url.hostname)) return '';
-    if (!url.pathname.startsWith('/maps/')) return '';
-    return url.toString();
+      !GOOGLE_HOST.test(url.hostname)) return '';
+    const cidLink = (url.pathname === '/maps' || url.pathname === '/') && /^\d{5,25}$/.test(url.searchParams.get('cid') || '');
+    if (!url.pathname.startsWith('/maps/') && !cidLink) return '';
+    url.hostname = 'www.google.com';
+    if (url.pathname === '/') url.pathname = '/maps';
+    return withMapsLanguage(url.toString());
   } catch { return ''; }
 }
 
-export async function launchBrowser(options = {}) {
+/**
+ * The reader matches Maps' Turkish UI texts, so every Maps URL carries hl=tr: the page language then no longer
+ * depends on the server locale or the signed-in account's language.
+ */
+export function withMapsLanguage(value) {
+  try {
+    const url = new URL(value);
+    if (url.hostname !== 'www.google.com' || !url.pathname.startsWith('/maps')) return value;
+    url.searchParams.set('hl', 'tr');
+    return url.toString();
+  } catch { return value; }
+}
+
+/** Normalised Maps link for readPlace/readPlaceUrl, or '' when the link is not a Google Maps place link. */
+export function normalizePlaceUrl(value) {
+  const direct = safeMapsUrl(value);
+  if (direct) return direct;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.username || url.password || (url.port && url.port !== '443')) return '';
+    if (url.hostname === 'maps.app.goo.gl' || (url.hostname === 'goo.gl' && url.pathname.startsWith('/maps/'))) return url.toString();
+  } catch { /* Invalid or unsupported Maps URL. */ }
+  return '';
+}
+
+/** Chrome/Chromium binary: option, MAPS_CHROME_PATH, or the default Windows install location. */
+export function chromeExecutable(options = {}) {
   const executablePath = options.executablePath || process.env.MAPS_CHROME_PATH ||
     (process.platform === 'win32' ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' : undefined);
   if (!executablePath) throw new Error('CHROME_PATH_REQUIRED');
+  return executablePath;
+}
+
+export async function launchBrowser(options = {}) {
+  const executablePath = chromeExecutable(options);
   const userDataDir = options.userDataDir || process.env.MAPS_PROFILE_DIR;
   if (userDataDir && !path.isAbsolute(userDataDir)) throw new Error('MAPS_PROFILE_PATH_MUST_BE_ABSOLUTE');
   const loaded = await loadGoogleCookies(options);
@@ -129,57 +171,157 @@ export async function searchPlaces(page, { location, keyword = 'restoran', limit
     places: [...places.values()].slice(0, limit), truncated: !exhausted, requested_limit: limit };
 }
 
-async function navigatePlace(page, target) {
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      await page.goto(target, { waitUntil: 'domcontentloaded' });
-      await passConsent(page);
-      break;
-    } catch (error) {
-      if (attempt || !/Timeout|net::ERR_(CONNECTION|TIMED_OUT|NETWORK)/.test(String(error?.message))) throw error;
-      await sleep(600);
-    }
+const PANEL_READY = `(() => {
+  const heading = [...document.querySelectorAll('h1')].find(el => el.getClientRects().length && el.innerText.trim() &&
+    !/^google maps$|^google haritalar$/i.test(el.innerText.trim()));
+  return !!heading && !!document.querySelector('[data-item-id]');
+})()`;
+const ACCESS_PAGE = `(location.hostname === 'accounts.google.com' || location.hostname.startsWith('consent.google.') ||
+  location.pathname.startsWith('/sorry/'))`;
+
+// The place's main tab list is the one with About; the Menu tab has its own "Overview" sub-tab list.
+const MAIN_OVERVIEW_TAB = `(() => {
+  const normalize = value => String(value || '').trim().toLocaleLowerCase('tr').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ı/g, 'i');
+  const tablist = [...document.querySelectorAll('[role="tablist"]')].find(list => list.getClientRects().length &&
+    [...list.querySelectorAll('[role="tab"]')].some(item => /^(?:hakkinda|about)$/.test(normalize(item.textContent))));
+  return [...(tablist?.querySelectorAll('[role="tab"]') || [])].find(item => /^(?:genel bakis|overview)$/.test(normalize(item.textContent))) || null;
+})()`;
+
+/** Links copied on the Menu or Reviews tab open that tab; the business details live on Overview. */
+async function showOverview(page) {
+  // The first tabs can render before the main tab list does: wait for the panel or the main Overview tab.
+  await page.waitForFunction(`${PANEL_READY} || !!${MAIN_OVERVIEW_TAB}`, { timeout: 8000 }).catch(() => {});
+  // The tab is drawn before Maps wires its click handler, so an early click can be lost: retry until it switches.
+  let clicked = false;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const state = await page.evaluate(`(() => {
+      if (${PANEL_READY}) return 'ready';
+      const tab = ${MAIN_OVERVIEW_TAB};
+      if (!tab) return 'none';
+      if (tab.getAttribute('aria-selected') === 'true') return 'selected';
+      tab.click();
+      return 'clicked';
+    })()`).catch(() => 'none');
+    if (state === 'ready' || state === 'none') break;
+    if (state === 'clicked') clicked = true;
+    await page.waitForFunction(PANEL_READY, { timeout: 2500 }).catch(() => {});
   }
-  await page.waitForFunction(() => {
-    const heading = [...document.querySelectorAll('h1')].find(el => el.innerText.trim() && !/^google maps$|^google haritalar$/i.test(el.innerText.trim()));
-    return heading && document.querySelector('[data-item-id], [role="tab"]') ||
-      location.hostname === 'accounts.google.com' || location.hostname.startsWith('consent.google.') || location.pathname.startsWith('/sorry/');
-  }, { timeout: 15000 }).catch(() => {});
+  return clicked;
+}
+
+async function navigatePlace(page, target) {
+  for (let load = 0; load < 2; load++) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        await page.goto(target, { waitUntil: 'domcontentloaded' });
+        await passConsent(page);
+        break;
+      } catch (error) {
+        if (attempt || !/Timeout|net::ERR_(CONNECTION|TIMED_OUT|NETWORK)/.test(String(error?.message))) throw error;
+        await sleep(600);
+      }
+    }
+    // Share links (maps.app.goo.gl) redirect to a URL without hl=tr: reload it in Turkish.
+    const turkish = withMapsLanguage(page.url());
+    if (turkish !== page.url() && /^https:\/\/www\.google\.com\/maps/.test(turkish)) {
+      await page.goto(turkish, { waitUntil: 'domcontentloaded' }).catch(() => {});
+    }
+    target = turkish.startsWith('https://www.google.com/maps') ? turkish : target;
+    await page.waitForFunction(`${PANEL_READY} || ${ACCESS_PAGE} || !!document.querySelector('[role="tab"]')`,
+      { timeout: 15000 }).catch(() => {});
+    await showOverview(page);
+    // The place panel sometimes never renders on the first load; one fresh load usually fixes it.
+    if (await page.evaluate(`${PANEL_READY} || ${ACCESS_PAGE}`).catch(() => false)) break;
+  }
   await sleep(500);
 }
 
-export async function readPlace(page, place, { maxImages = 12, maxMenuImages = 20, maxScrolls = 20, onProgress } = {}) {
-  const target = safeMapsUrl(place?.google_maps_url || place?.url);
+/** Opens Maps once and reports whether Google treats this browser (profile) as signed in. */
+export async function checkSession(browser) {
+  const page = await newMapsPage(browser);
+  try {
+    await page.goto('https://www.google.com/maps?hl=tr', { waitUntil: 'domcontentloaded' });
+    await passConsent(page);
+    await page.waitForFunction(() => [...document.querySelectorAll('a, button')].some(el =>
+      /^(?:google hesabı|google account)/i.test(el.getAttribute('aria-label') || '') || /^(?:oturum açın|sign in)$/i.test((el.innerText || '').trim())),
+      { timeout: 15000 }).catch(() => {});
+    // A short stay lets Google rotate the session cookies; the profile keeps the fresh ones.
+    await sleep(3000);
+    return await sessionState(page);
+  } finally { await page.close(); }
+}
+
+/** Whether Google shows this browser session as signed in (account button) or signed out. */
+export async function sessionState(page) {
+  return page.evaluate(() => {
+    const labels = [...document.querySelectorAll('a[aria-label], button[aria-label]')].map(el => el.getAttribute('aria-label') || '');
+    if (labels.some(label => /^(?:google hesabı|google account)/i.test(label))) return 'signed_in';
+    if ([...document.querySelectorAll('a, button')].some(el => /^(?:oturum açın|oturum aç|sign in)$/i.test((el.innerText || '').trim()))) return 'signed_out';
+    return 'unknown';
+  }).catch(() => 'unknown');
+}
+
+export async function readPlace(page, place, { maxImages = 12, maxMenuImages = 20, maxScrolls = 20,
+  includeReviews = false, maxReviews = 100, maxReviewScrolls = 25, reviewSort = 'relevant', onProgress } = {}) {
+  const target = normalizePlaceUrl(place?.google_maps_url || place?.url);
   if (!target) throw new Error('INVALID_MAPS_URL');
   await navigatePlace(page, target);
   const status = await pageStatus(page);
   const canonical = safeMapsUrl(page.url()) || target;
+  const session = await sessionState(page);
   const identity = placeIdentity(canonical) || placeIdentity(target);
-  if (!['ok', 'limited_view'].includes(status)) return { status, source_id: identity, google_maps_url: canonical };
+  if (!['ok', 'limited_view'].includes(status)) return { status, session, source_id: identity, google_maps_url: canonical };
   const details = await extractPlaceDetails(page);
-  if (details.data_status !== 'ok') return { status: 'unavailable', source_id: identity, google_maps_url: canonical };
+  if (details.data_status !== 'ok') return { status: 'unavailable', session, source_id: identity, google_maps_url: canonical };
+  try {
+    const about = await extractAboutDetails(page);
+    details.description ||= about.description;
+    details.attributes = about.attributes || [];
+    details.about_status = about.status;
+    details.about_coverage_complete = !about.truncated;
+  } catch { details.attributes = []; details.about_status = 'unavailable'; }
   if (onProgress) await onProgress({ stage:'overview', status }, page);
   const warnings = [];
   if (status !== 'ok') warnings.push(status.toUpperCase());
-  let menu, photos;
+  // Cookies were loaded but Google does not treat the session as signed in (expired or device-bound cookies).
+  if (session === 'signed_out' && page.browser?.()?.mapsCookieStats?.configured) warnings.push('COOKIES_NOT_SIGNED_IN');
+  let menu, photos, reviews;
   try { menu = await readMenu(page, { maxImages: maxMenuImages, maxScrolls, overviewUrl: canonical, onProgress }); }
   catch { menu = { status: 'unavailable', images: [], categories: [], coverage_complete: false }; warnings.push('MENU_READ_FAILED'); }
   try { photos = await readPhotos(page, { maxImages, maxScrolls, overviewUrl: canonical, exclude: (menu.images || []).map(row => row.url) }); }
   catch { photos = { status: 'unavailable', images: [], coverage_complete: false }; warnings.push('PHOTOS_READ_FAILED'); }
+  if (includeReviews) {
+    try { reviews = await readReviews(page, { overviewUrl: canonical, reviewCount: details.review_count,
+      maxReviews, maxScrolls: maxReviewScrolls, sort: reviewSort, onProgress }); }
+    catch { reviews = { status: 'unavailable', reviews: [], total_count: details.review_count || 0,
+      collected_count: 0, truncated: true, coverage_complete: false, reason: 'REVIEW_READ_FAILED' }; }
+  }
   const menuUrls = new Set(menu.images.map(row => imageIdentity(row.url)));
   photos.images = photos.images.filter(row => !menuUrls.has(imageIdentity(row.url)));
   if (menu.status === 'unavailable') warnings.push(menu.reason || 'MENU_UNAVAILABLE');
   if (menu.status === 'empty') warnings.push('MENU_IMAGES_NOT_LOADED');
   if (photos.status === 'unavailable') warnings.push('PHOTOS_UNAVAILABLE');
+  if (includeReviews && (reviews.status === 'unavailable' || (reviews.status === 'empty' && details.review_count > 0))) warnings.push('REVIEWS_UNAVAILABLE');
+  if (reviews?.truncated) warnings.push('REVIEWS_LIMIT_OR_SCROLL_LIMIT');
   if (menu.truncated) warnings.push('MENU_IMAGE_LIMIT_OR_SCROLL_LIMIT');
   if (photos.truncated) warnings.push('PHOTO_IMAGE_LIMIT_OR_SCROLL_LIMIT');
   // Hitting our own image limits is not a source failure; the warnings still record it.
   const finalStatus = status !== 'ok' ? status : warnings.some(code => !code.endsWith('_LIMIT_OR_SCROLL_LIMIT')) ? 'incomplete' : 'ok';
-  return { status: finalStatus, source_id: identity, google_maps_url: canonical, ...details, menu, photos,
+  return { status: finalStatus, session, source_id: identity, google_maps_url: canonical, ...details, menu, photos,
+    ...(includeReviews ? { reviews } : {}),
     warnings: [...new Set(warnings)], data_quality: { partial: finalStatus !== 'ok',
       review_count_observed: !!details.review_label, menu_coverage_complete: !!menu.coverage_complete,
+      review_coverage_complete: !!reviews?.coverage_complete,
+      about_coverage_complete: !!details.about_coverage_complete,
       opening_hours_coverage_complete: details.opening_hours_rows?.length === 7,
       photo_coverage_complete: !!photos.coverage_complete } };
+}
+
+/** Open and read one Maps URL without requiring callers to create or close a page. */
+export async function readPlaceUrl(browser, url, options = {}) {
+  const page = await newMapsPage(browser);
+  try { return await readPlace(page, { google_maps_url: url }, options); }
+  finally { await page.close(); }
 }
 
 export function toObservation(place, detail, { keyword = '', location = '' } = {}) {
@@ -198,13 +340,15 @@ export function toObservation(place, detail, { keyword = '', location = '' } = {
     observed_width: row.width, observed_height: row.height, categories: row.categories || [], label: cap(row.label, 250),
     taken_at: /^\d{4}-\d{2}$/.test(row.taken_at || '') ? row.taken_at : '' }));
   return { schema_version: 'gmaps.place.v1', source: 'google_maps_browser', source_id: sourceId,
-    name: cap(detail.name || place.name, 200) || 'Adsız işletme', address: cap(String(detail.address || '').replace(/^Adres:\s*/i, ''), 500),
+    name: cap(detail.name || place.name, 200) || 'Adsız işletme', description: cap(detail.description, 5000),
+    attributes: detail.attributes || [], address: cap(String(detail.address || '').replace(/^Adres:\s*/i, ''), 500),
     phone: cap(String(detail.phone || '').replace(/^(Telefon|Phone):\s*/i, ''), 80), website: cap(detail.website, 1000),
     website_status: detail.website ? 'present' : 'unknown', website_verified: false,
     opening_hours: detail.opening_hours || '', opening_hours_rows: detail.opening_hours_rows || [],
     business_type: detail.business_type || '', latitude: detail.latitude ?? 0, longitude: detail.longitude ?? 0,
     menu_url: detail.menu_url || '', price_level: detail.price_level || '',
     menu_items: detail.menu?.items || [], menu_categories: detail.menu?.categories || [],
+    reviews: detail.reviews?.reviews || [], review_coverage_complete: !!detail.reviews?.coverage_complete,
     place_id: detail.place_id || '', cid: detail.cid || '',
     data_quality: detail.data_quality || { partial: !ok }, warnings: detail.warnings || [],
     review_count: reviewCount, rating, photo_count: new Set([...images, ...menus].map(row => imageIdentity(row.url)).filter(Boolean)).size,
@@ -225,7 +369,8 @@ export function toObservation(place, detail, { keyword = '', location = '' } = {
     observed_at: now, scan_keyword: keyword, scan_location: location };
 }
 
-export async function scan(browser, { location, keyword = 'restoran', limit = 20, known = [], maxImages = 12, maxMenuImages = 20, maxScrolls = 20 } = {}) {
+export async function scan(browser, { location, keyword = 'restoran', limit = 20, known = [], maxImages = 12,
+  maxMenuImages = 20, maxScrolls = 20, includeReviews = false, maxReviews = 100, maxReviewScrolls = 25, reviewSort = 'relevant' } = {}) {
   const page = await newMapsPage(browser);
   try {
     const found = await searchPlaces(page, { location, keyword, limit, maxScrolls });
@@ -236,7 +381,7 @@ export async function scan(browser, { location, keyword = 'restoran', limit = 20
     for (const place of found.places) {
       if (knownIds.has(place.source_id)) { skipped++; continue; }
       try {
-        const detail = await readPlace(page, place, { maxImages, maxMenuImages, maxScrolls });
+        const detail = await readPlace(page, place, { maxImages, maxMenuImages, maxScrolls, includeReviews, maxReviews, maxReviewScrolls, reviewSort });
         items.push(toObservation(place, detail, { location, keyword }));
         if (detail.status !== 'ok') incomplete = true;
       } catch {

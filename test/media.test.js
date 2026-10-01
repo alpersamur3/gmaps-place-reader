@@ -174,6 +174,39 @@ test('menu album is walked in the viewer: dates, original sizes, videos skipped,
   });
 });
 
+test('Menu tab 1/N strip opens and exhausts its own photo album', async () => {
+  const photos = [['MENU_TAB_1', 'Fotoğraf - Oca 2026', 4032, 3024, 'Görüntünün çekilme tarihi: Ara 2025'],
+    ['MENU_TAB_2', 'Fotoğraf - Şub 2026', 3024, 4032, '']];
+  const html = `<main role="main"><div role="tablist">
+    <button role="tab">Genel Bakış</button><button role="tab" id="menu">Menü</button>
+    <button role="tab">Yorumlar</button><button role="tab">Hakkında</button></div>
+    <div role="region" aria-label="Menü" hidden>
+      <button aria-label="Fotoğraf 1/2" id="first"></button><button aria-label="Fotoğraf 2/2"></button>
+    </div><div id="date"></div><div id="captured"></div>
+    <button aria-label="Sonraki" jsaction="play.onRightClick" id="next">›</button>
+    <script>
+      const photos = ${JSON.stringify(photos)}; let index = -1;
+      const show = i => {
+        index = i; const [id,label,w,h,captured] = photos[i];
+        const src = encodeURIComponent('https://lh3.googleusercontent.com/p/' + id + '=w195-h146-k-no');
+        history.pushState(null,'','/maps/place/Test/data=!3m8!1e2!3m6!1s' + id + '!2e10!3e12!6s' + src + '!7i' + w + '!8i' + h + '!4m2!3m1!1s0x1:0x2');
+        document.querySelector('#date').textContent=label; document.querySelector('#captured').textContent=captured;
+        document.querySelector('#next').disabled=i===photos.length-1;
+      };
+      document.querySelector('#menu').onclick=()=>document.querySelector('[role=region]').hidden=false;
+      document.querySelector('#first').onclick=()=>show(0);
+      document.querySelector('#next').onclick=()=>show(index+1);
+    </script></main>`;
+  await mapsFixture(html, async page => {
+    const result = await readMenuPhotos(page, { overviewUrl: PLACE, maxImages: 10, waitMs: 20 });
+    assert.equal(result.status, 'found');
+    assert.equal(result.source, 'menu_tab');
+    assert.equal(result.expected_images, 2);
+    assert.equal(result.truncated, false);
+    assert.deepEqual(result.images.map(row => [row.width,row.height,row.taken_at]), [[4032,3024,'2025-12'],[3024,4032,'2026-02']]);
+  });
+});
+
 test('a wrapping viewer ends at the first repeated photo; the limit marks the album truncated', async () => {
   const photos = [['MENU_PAGE_1', 'Fotoğraf - Oca 2026', 10, 20], ['MENU_PAGE_2', 'Fotoğraf - Şub 2026', 10, 20]];
   await mapsFixture(galleryHtml({ photos, wraps: true }), async page => {
