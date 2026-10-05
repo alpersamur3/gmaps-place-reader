@@ -2,13 +2,13 @@
 
 [Türkçe](tr/api.md) · [Docs index](README.md)
 
-ESM only: `import { … } from 'gmaps-place-reader'`. Subpath exports: `gmaps-place-reader/media`, `/details`, `/reviews`, `/cookies`.
+ESM only: `import { … } from 'gmaps-place-reader'`. Subpath exports: `gmaps-place-reader/media`, `/details`, `/reviews`.
 
 ## Browser
 
 | Function | Description |
 |---|---|
-| `launchBrowser(options?)` | Starts Chrome/Chromium through `puppeteer-core`. Options: `executablePath` (or `MAPS_CHROME_PATH`; the default Windows install is found automatically), `userDataDir` (or `MAPS_PROFILE_DIR`; absolute, **recommended**), `cookiesFile` (or `MAPS_COOKIES_FILE`; optional), `headless` (default `true`). The browser carries `mapsCookieStats` (counts only). |
+| `launchBrowser(options?)` | Starts Chrome/Chromium through `puppeteer-core`. Options: `executablePath` (or `MAPS_CHROME_PATH`; the default Windows install is found automatically), `userDataDir` (or `MAPS_PROFILE_DIR`; absolute, **recommended**), `headless` (default `true`). No account is used and no cookies are loaded. |
 | `newMapsPage(browser)` | A page prepared for Maps: the installed Chrome's desktop user agent (never `HeadlessChrome`) and Turkish UI. |
 | `chromeExecutable(options?)` | The Chrome path that `launchBrowser` would use. |
 
@@ -46,14 +46,11 @@ ESM only: `import { … } from 'gmaps-place-reader'`. Subpath exports: `gmaps-pl
 | `readReviews(page, { overviewUrl, reviewCount, maxReviews, maxScrolls, sort, onProgress })` | Reviews with exact dates when Google sends them ([fields](data.md#reviews-placereviews)). |
 | `extractPlaceDetails(page)`, `extractAboutDetails(page)` (`/details`) | Business details, About attributes. |
 
-## View and session
+## View
 
 | Function | Description |
 |---|---|
 | `checkView(browser, url = VIEW_CHECK_PLACE)` | Opens one place, repairs a limited view: `{ view: 'full' \| 'limited' \| …, renewed }`. |
-| `refreshSession(browser, { rotationWaitMs = 60000 })` | `{ session, rotated }`; when signed in, waits for Google's cookie rotation. |
-| `checkSession(browser)` | `refreshSession(…).session`. |
-| `sessionState(page)` | `signed_in` · `signed_out` · `unknown`. |
 | `mintFullViewCookies(executablePath, { attempts = 6, place })` | Full-view anonymous id cookies from fresh temporary profiles, or `null`. |
 | `nextViewStep(state)` | The recovery decision (`reload` · `renew` · `stop`), exported for tests. |
 | `VIEW_CHECK_PLACE` | The well-known place used by `checkView`. |
@@ -71,4 +68,3 @@ ESM only: `import { … } from 'gmaps-place-reader'`. Subpath exports: `gmaps-pl
 | `photoMonth(label)`, `viewerPhoto(href)` (`/media`) | Photo viewer date labels → `YYYY-MM`, viewer URL → `{ id, url, width, height }`. |
 | `parseRelativeAge(label)`, `estimateReviewDate(label)` | "2 ay önce" → `{ amount, unit, edited }` → `{ date, precision }`. |
 | `reviewsPageUrl(url)`, `editMapsData(data, edit)` (`/reviews`) | The Reviews deep link; edits a `data=` path keeping its nested counts consistent. |
-| `normalizeGoogleCookies(input)`, `loadGoogleCookies(options)` (`/cookies`) | Cookie-Editor, Cookie Quick Manager, Puppeteer and Playwright exports → Puppeteer cookies, `google.com` and `google.com.tr` only. |

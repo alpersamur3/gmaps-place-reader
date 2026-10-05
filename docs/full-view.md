@@ -46,26 +46,26 @@ The same place was read with the same options twice, once by a signed-in profile
 
 On the EU server, anonymous profiles also read 300 newest reviews (all with exact dates), the complete menu album, every supported link format including a `maps.app.goo.gl` share link, and multi-place scans.
 
-### Why not sessions
+### Why no account
 
-Google revokes sessions whose cookies are moved to another machine. In our tests imported sessions were signed out between about five minutes and two hours after they reached the server. This also happened when the cookies came from a private window that was not used again. See [Sessions (optional)](#sessions-optional).
+The reader never signs in and loads no cookies. A Google account would add nothing (see above), and Google revokes sessions whose cookies are moved to another machine: in our tests imported sessions were signed out between about five minutes and two hours after they reached the server, also when the cookies came from a private window that was not used again.
 
 ## How the reader keeps the full view
 
 1. **Use a persistent profile** (`MAPS_PROFILE_DIR` or `launchBrowser({ userDataDir })`, an absolute path). The profile stores the anonymous id. Without one, every launch starts with a new random id.
-2. **Recovery in `readPlace`** (option `recoverView`, default `true`). When a place comes back limited and the browser is not signed in, these steps run in order:
+2. **Recovery in `readPlace`** (option `recoverView`, default `true`). When a place comes back limited, these steps run in order:
    1. **Reload once.** A fresh profile receives its id with the first page, and the id only applies from the next request.
    2. **Renew.** Start up to six fresh temporary profiles with the same Chrome until one gets the full view. Move its anonymous id cookie(s) into your profile, replacing the limited ones, and reload the place. Each temporary profile takes about 10–20 s and is deleted afterwards.
-   3. **If no temporary profile gets the full view** (rare: about 1–2 % with a 50 % chance per profile, or when Google issues no id at all), the place is returned as it is: `status: 'limited_view'`, `view: 'limited'`, warning `LIMITED_VIEW`. The browser is marked so that later places do not pay for more attempts; it reads them in the limited view and says so in every result. The next browser launch, or the next `gmaps-session check`, tries again.
-3. **Check from cron.** `gmaps-session check` opens a well-known place, reports `"view"` and repairs a limited view the same way. Exit code `0` means full view, `3` limited.
+   3. **If no temporary profile gets the full view** (rare: about 1–2 % with a 50 % chance per profile, or when Google issues no id at all), the place is returned as it is: `status: 'limited_view'`, `view: 'limited'`, warning `LIMITED_VIEW`. The browser is marked so that later places do not pay for more attempts; it reads them in the limited view and says so in every result. The next browser launch, or the next `gmaps-view`, tries again.
+3. **Check from cron.** `gmaps-view` opens a well-known place, reports `"view"` and repairs a limited view the same way. Exit code `0` means full view, `3` limited.
 
    ```bash
    # /etc/cron.d/gmaps-view — every hour, as the user that runs the reader
-   17 * * * * reader MAPS_CHROME_PATH=/usr/bin/google-chrome MAPS_PROFILE_DIR=/srv/gmaps/profile npx gmaps-session check >> /var/log/gmaps-view.log 2>&1
+   17 * * * * reader MAPS_CHROME_PATH=/usr/bin/google-chrome MAPS_PROFILE_DIR=/srv/gmaps/profile npx gmaps-view >> /var/log/gmaps-view.log 2>&1
    ```
 
    ```json
-   {"status":"ok","command":"check","session":"signed_out","rotated":false,"view":"full","renewed":0,"profile":"/srv/gmaps/profile"}
+   {"status":"ok","view":"full","renewed":0,"profile":"/srv/gmaps/profile"}
    ```
 
 ### Every result says which view it got
@@ -81,11 +81,3 @@ Google revokes sessions whose cookies are moved to another machine. In our tests
 - **Avoid bursts.** Creating many new ids from one address in a short time produced more limited ids in our tests. The reader creates them only when needed, and a persistent profile keeps a good one for months.
 - **Keep the profile private.** It is not an account credential, but it identifies the browser.
 
-## Sessions (optional)
-
-No session was needed in our tests. If you still want one, use a **separate** Google account and keep it on the machine where you signed in:
-
-- **Computer with a screen:** `gmaps-login` opens your installed Chrome as an ordinary window. Google refuses sign-ins in automated browsers, so the window is not automated. Sign in, close the window, and the command checks the profile.
-- **Server:** `gmaps-session import <cookies.json>` loads a cookie export (Cookie-Editor, Cookie Quick Manager, Puppeteer, Playwright) into the profile. Expect Google to revoke such sessions (see above).
-- While signed in, `gmaps-session check` waits for Google's cookie rotation (`"rotated": true`).
-- `COOKIES_NOT_SIGNED_IN` in `warnings` means cookies were loaded but Google no longer treats them as signed in.

@@ -10,9 +10,9 @@ Every result says what it could and could not read. Check `status` and `view` fi
 |---|---|---|
 | `ok` | Everything that was requested was read. Limits you set may still have stopped a list (`…_LIMIT_OR_SCROLL_LIMIT`). | — |
 | `incomplete` | The place was read in the full view, but a part failed; see `warnings`. | Usually transient; read the place again. |
-| `limited_view` | Google served the limited view and it could not be repaired ([Full view](full-view.md)). Menu items, the album and some details are missing. | Use a persistent profile and run `gmaps-session check`. Make sure the user agent's operating system matches the one the profile was created on. |
+| `limited_view` | Google served the limited view and it could not be repaired ([Full view](full-view.md)). Menu items, the album and some details are missing. | Use a persistent profile and run `gmaps-view`. Make sure the user agent's operating system matches the one the profile was created on. |
 | `consent_required` | The EU consent page could not be passed (no "Reject all" button). | Check the page in a visible browser (`headless: false`). |
-| `auth_required` | Google asked to sign in. | Rare without cookies. Remove stale cookies, or sign in with `gmaps-login`. |
+| `auth_required` | Google showed a sign-in page instead of the place. | Rare. Read the place again; if it repeats, start with a fresh profile. |
 | `blocked` | "Unusual traffic" / CAPTCHA. The reader never tries to bypass it. | Slow down, pause, read fewer places per run. |
 | `unavailable` | The place panel did not load, or the link is not a place. | Check the link; try again. |
 
@@ -21,7 +21,6 @@ Every result says what it could and could not read. Check `status` and `view` fi
 | Warning | Meaning |
 |---|---|
 | `LIMITED_VIEW` | The place was read in the limited view. |
-| `COOKIES_NOT_SIGNED_IN` | Cookies were loaded but Google no longer treats them as signed in (revoked or expired session). The full view does not need them. |
 | `MENU_PHOTOS_UNAVAILABLE` | Menu items were read but the menu photo album could not be opened. |
 | `MENU_IMAGES_NOT_LOADED` | The album opened but no photo loaded. |
 | `PHOTO_GALLERY_NOT_EXPOSED`, `MENU_CATEGORY_NOT_EXPOSED`, `MENU_UNAVAILABLE` | Why the menu album was unavailable (gallery not offered, or offered without categories). |
@@ -41,7 +40,7 @@ Every result says what it could and could not read. Check `status` and `view` fi
 
 **The same photo has different URLs in different runs.** Google signs photo URLs per browser (`gps-cs-s/…`, `grass-cs/…`). Compare photos by `taken_at`, `width`, `height` and `label`, not by URL.
 
-**Results differ between two computers.** Check `view` in both results. A limited view on one of them means its profile holds a limited anonymous id; `gmaps-session check` repairs it.
+**Results differ between two computers.** Check `view` in both results. A limited view on one of them means its profile holds a limited anonymous id; `gmaps-view` repairs it.
 
 **Chrome does not start on Linux.** Set `MAPS_CHROME_PATH` (e.g. `/usr/bin/google-chrome`), run as a normal user (not root), and give each running browser its own profile folder.
 

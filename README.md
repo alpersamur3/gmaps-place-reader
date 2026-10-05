@@ -30,7 +30,7 @@
 - **About content:** business description when Google provides one and categorized attributes such as access, service, atmosphere and payment options.
 - **The complete menu photo album.** The Menu strip on the overview only renders a few thumbnails even when it says "Photo 1/12", so the album is read in the full-screen photo viewer. Every photo comes with its full-size URL, **original dimensions** and **the month it was taken** (`taken_at`, e.g. `2026-01`), which lets you prefer the newest menu when older photos show outdated prices.
 - **Menu items and prices** from the Menu tab, by category.
-- **Full view without an account.** Google shows anonymous browsers either a limited or the full place page. A persistent profile keeps the full view, and the reader repairs a limited view by itself; every result says which view it got (`view`). In our tests a signed-in session returned exactly the same data. See [Full view without an account](docs/full-view.md).
+- **Full view without an account.** Google shows anonymous browsers either a limited or the full place page. A persistent profile keeps the full view, and the reader repairs a limited view by itself; every result says which view it got (`view`). A Google account would add nothing: in our tests a signed-in session returned exactly the same data. See [Full view without an account](docs/full-view.md).
 - **Detailed, dated reviews on request:** reviewer, rating (rating-only reviews included), full text, owner response, likes, attached photos, sub-ratings and other details (`Yiyecek: 5`, price per person …), edit and "translated by Google" markers. Each review gets its **exact posting date** (`date_iso`) read from the data Google sends to the page, checked against the "2 months ago" label; otherwise an approximate date (`date_estimate`) with its precision. Optional **newest-first** order (`reviewSort: 'newest'`); the list is paged to the end, so every review can be read.
 - **One-link lookup:** pass a Google Maps link to `readPlaceUrl` or `gmaps-place --url ...` — `maps.app.goo.gl` share links, links on any Google country domain (`google.com.tr`, …), `?cid=` links, and links copied while the Menu or Reviews tab was open.
 - **General photos** from the place gallery; menu photos, avatars and size variants of the same image are removed.
@@ -81,7 +81,7 @@ Detailed documentation lives in [`docs/`](docs/README.md): [full view without an
 
 | Function | Returns |
 |---|---|
-| `launchBrowser(options?)` | A Puppeteer browser. Options: `executablePath`, `userDataDir` (persistent profile, recommended), `cookiesFile` (optional), `headless` (default `true`). |
+| `launchBrowser(options?)` | A Puppeteer browser. Options: `executablePath`, `userDataDir` (persistent profile, recommended), `headless` (default `true`). |
 | `newMapsPage(browser)` | A page prepared for Maps (desktop user agent, Turkish UI). |
 | `searchPlaces(page, { location, keyword?, limit?, maxScrolls? })` | `{ status, places: [{ source_id, name, google_maps_url }], truncated }`. `limit` is capped at 60. |
 | `readPlace(page, place, { includeReviews?, maxReviews?, maxReviewScrolls?, reviewSort?, maxImages?, maxMenuImages?, maxScrolls?, recoverView?, onProgress? })` | Business details and About attributes, plus `menu`, `photos`, optional `reviews`, `view`, `warnings` and `data_quality`. Reviews default off; the limit defaults to 100 and can be raised to 10,000. `recoverView` (default `true`) repairs a limited view. |
@@ -91,18 +91,18 @@ Detailed documentation lives in [`docs/`](docs/README.md): [full view without an
 | `scan(browser, { location, keyword?, limit?, known?, maxImages?, maxMenuImages?, includeReviews?, maxReviews?, maxReviewScrolls? })` | Search and details in one call; optionally collects reviews and returns `{ status, items, skipped_known }` with normalized records. Places listed in `known` (`{ source: 'google_maps_browser', source_id }`) are skipped. |
 | `toObservation(place, detail)` | Flattens a `readPlace` result into one record (`schema_version: 'gmaps.place.v1'`) with `assets`, `menu_assets` and optional reviews. |
 
-Helpers: `normalizePlaceUrl(url)` (check a link before launching a browser), `fullImageUrl(url)` (large variant of a Google photo URL), `placeIdentity(url)`, `pageStatus(page)`, `sessionState(page)`, `passConsent(page)`, `parseRelativeAge(label)`, `estimateReviewDate(label)`, `checkView(browser, url?)` (`{ view, renewed }`, repairs a limited view), `refreshSession(browser)` (`{ session, rotated }`).
-Subpath exports: `gmaps-place-reader/media`, `/details`, `/reviews`, `/cookies`.
+Helpers: `normalizePlaceUrl(url)` (check a link before launching a browser), `fullImageUrl(url)` (large variant of a Google photo URL), `placeIdentity(url)`, `pageStatus(page)`, `passConsent(page)`, `parseRelativeAge(label)`, `estimateReviewDate(label)`, `checkView(browser, url?)` (`{ view, renewed }`, repairs a limited view).
+Subpath exports: `gmaps-place-reader/media`, `/details`, `/reviews`.
 
 Review options: `includeReviews` (default `false`), `maxReviews` (100, up to 10,000), `maxReviewScrolls` (25, up to 1,000 — each step loads about 10 reviews), `reviewSort` (`relevant` · `newest` · `highest` · `lowest`). Review fields: `review_id`, `author`, `author_summary`, `rating`, `text`, `date_label`, `date_iso`, `date_estimate`, `date_precision` (`exact`, `day`, `week`, `month`, `year` …), `edited`, `edited_estimate` (approximate edit date of an edited review), `translated`, `photos`, `owner_response`, `likes`, `language`, `details` (the structured lines under a review: sub-ratings such as `{ name: 'Yiyecek', value: '5' }` and rows such as `{ name: 'Kişi başı fiyat', value: '₺400–600' }`). The `reviews` result also reports `sort_label` and `sort_applied`; when the requested order could not be chosen, `warnings` contains `REVIEW_SORT_NOT_APPLIED`.
 
-Every result carries `view` (`full` · `limited` · `unknown`) and `session` (`signed_in` · `signed_out` · `unknown`). When cookies were loaded but Google still shows the session as signed out, `warnings` contains `COOKIES_NOT_SIGNED_IN`. Every function, option and field: [docs/api.md](docs/api.md), [docs/data.md](docs/data.md).
+Every result carries `view` (`full` · `limited` · `unknown`). Every function, option and field: [docs/api.md](docs/api.md), [docs/data.md](docs/data.md).
 
-**Statuses:** `ok`, `incomplete` (some parts could not be read, see `warnings`), `limited_view`, `auth_required`, `consent_required`, `blocked`, `unavailable`. Common warnings: `MENU_PHOTOS_UNAVAILABLE` (menu items were read but the menu photo album could not be opened), `REVIEWS_UNAVAILABLE`, `REVIEW_SORT_NOT_APPLIED`, `COOKIES_NOT_SIGNED_IN`, and `…_LIMIT_OR_SCROLL_LIMIT` when your own limits stopped a list.
+**Statuses:** `ok`, `incomplete` (some parts could not be read, see `warnings`), `limited_view`, `auth_required`, `consent_required`, `blocked`, `unavailable`. Common warnings: `MENU_PHOTOS_UNAVAILABLE` (menu items were read but the menu photo album could not be opened), `REVIEWS_UNAVAILABLE`, `REVIEW_SORT_NOT_APPLIED`, `LIMITED_VIEW`, and `…_LIMIT_OR_SCROLL_LIMIT` when your own limits stopped a list.
 
 ### Command line
 
-The commands write one JSON response to stdout (exit code `2` on failure, with an `error_code`). Set `MAPS_PROFILE_DIR` to a persistent profile; no cookies are needed. All flags and fields: [docs/cli.md](docs/cli.md).
+The commands write one JSON response to stdout (exit code `2` on failure, with an `error_code`). Set `MAPS_PROFILE_DIR` to a persistent profile; no account or cookies are used. All flags and fields: [docs/cli.md](docs/cli.md).
 
 ```bash
 # One place by link: details, menu, photos and the 300 newest reviews with dates
@@ -113,11 +113,7 @@ echo '{"schema_version":"gmaps.scan.request.v1","location":"Kadıköy, İstanbul
   | MAPS_PROFILE_DIR=/absolute/private/profile npx gmaps-scan
 
 # Keep the profile in the full view (cron, hourly): exit code 0 = full view, 3 = limited
-MAPS_PROFILE_DIR=/absolute/private/profile npx gmaps-session check
-
-# Optional sessions: sign in once in a normal Chrome window, or import a cookie export
-MAPS_PROFILE_DIR=/absolute/private/profile npx gmaps-login
-MAPS_PROFILE_DIR=/absolute/private/profile npx gmaps-session import ./google-cookies.json
+MAPS_PROFILE_DIR=/absolute/private/profile npx gmaps-view
 ```
 
 ### Configuration
@@ -125,10 +121,9 @@ MAPS_PROFILE_DIR=/absolute/private/profile npx gmaps-session import ./google-coo
 | Environment variable | Option | Purpose |
 |---|---|---|
 | `MAPS_CHROME_PATH` | `executablePath` | Chrome or Chromium binary |
-| `MAPS_COOKIES_FILE` | `cookiesFile` | Optional Google cookie export (Cookie-Editor JSON, Cookie Quick Manager for Firefox, Puppeteer cookies or Playwright storage state). Only `google.com` and `google.com.tr` cookies are loaded. Not needed for the full view. |
 | `MAPS_PROFILE_DIR` | `userDataDir` | Persistent, private browser profile (absolute path). **Recommended:** it keeps the full view. |
 
-Priority: command-line flag, then the JSON request (`cookies_file`), then the environment. Errors never include file paths, cookie names or values; `cookie_stats` only reports counts.
+Command-line flags and JSON request fields take priority over the environment.
 
 ### Full view without an account
 
@@ -136,16 +131,16 @@ Google Maps shows anonymous browsers either a **limited view** (no Menu tab, no 
 
 - **Use a persistent profile** (`MAPS_PROFILE_DIR` / `userDataDir`). It keeps the anonymous id.
 - **Limited view?** `readPlace` reloads the place once. If the profile still holds a limited id, it brings in a full-view id from up to six fresh temporary profiles. If none gets one, the place comes back as `limited_view` with `view: 'limited'`, and later places in that browser are not retried.
-- **Run `gmaps-session check` hourly** (cron). It reports `"view"`, repairs a limited view, and exits with `0` only for the full view.
-- **Sessions are optional.** Google revokes sessions whose cookies are moved to another machine (within minutes to two hours in our tests). If you still want one, use a separate account: `gmaps-login` on a computer with a screen, or `gmaps-session import <cookies.json>`.
+- **Run `gmaps-view` hourly** (cron). It reports `"view"`, repairs a limited view, and exits with `0` only for the full view.
+- **No account, no cookie files.** The reader never signs in and loads no cookies. A signed-in session returned the same data in our tests, and Google revokes sessions whose cookies are moved to another machine (within minutes to two hours).
 
 Details, measurements and tips: [docs/full-view.md](docs/full-view.md).
 
-Chrome or Chromium is needed in every case. It runs headless, so no desktop is required; on Linux run it as a normal user, not root. Keep cookie files and the profile folder private.
+Chrome or Chromium is needed in every case. It runs headless, so no desktop is required; on Linux run it as a normal user, not root. Keep the profile folder private.
 
 ### Limitations
 
-- Reads the **Turkish** Google Maps interface: every Maps URL is opened with `hl=tr`, so the server locale and the account language do not matter. English labels are recognized as well.
+- Reads the **Turkish** Google Maps interface: every Maps URL is opened with `hl=tr`, so the server locale and the browser language do not matter. English labels are recognized as well.
 - Google changes the Maps markup regularly, so selectors may need updates. When that happens you get `unavailable` or `incomplete` instead of wrong data.
 - Search radius is not an exact filter; Maps text search decides what is "nearby".
 - Exact review dates come from Google's own page data and are accepted only when they agree with the visible label; when they cannot be matched, `date_estimate` is derived from the label and `date_precision` says how coarse it is. For an edited review the label shows the edit age, while `date_iso` is the original posting date. Paging limits are reported through `truncated` and `coverage_complete`. Reading thousands of reviews takes minutes (about 10 per step).
@@ -186,7 +181,7 @@ Issues and pull requests are welcome.
 - **Hakkında bilgileri:** Google veriyorsa işletme açıklaması; erişilebilirlik, hizmet, atmosfer ve ödeme gibi kategorilere ayrılmış özellikler.
 - **Menü albümünün tamamı.** Genel bakıştaki menü şeridi "Fotoğraf 1/12" yazsa da yalnız birkaç küçük resim gösterir; bu yüzden albüm tam ekran fotoğraf görüntüleyicisinden okunur. Her fotoğraf tam boy adresi, **orijinal boyutu** ve **çekildiği ay** (`taken_at`, ör. `2026-01`) ile gelir. Eski fotoğraflarda güncel olmayan fiyatlar varsa en yeni menüyü seçebilirsiniz.
 - Menü sekmesinden kategorileriyle **ürünler ve fiyatlar**.
-- **Hesapsız tam görünüm.** Google oturumsuz tarayıcılara mekân sayfasının ya sınırlı ya da tam sürümünü gösterir. Kalıcı bir profil tam görünümü korur, okuyucu sınırlı görünümü kendisi onarır; her sonuç hangi görünümü aldığını söyler (`view`). Testlerimizde oturum açık bir profil birebir aynı veriyi döndürdü. Bkz. [Hesapsız tam görünüm](docs/tr/full-view.md).
+- **Hesapsız tam görünüm.** Google oturumsuz tarayıcılara mekân sayfasının ya sınırlı ya da tam sürümünü gösterir. Kalıcı bir profil tam görünümü korur, okuyucu sınırlı görünümü kendisi onarır; her sonuç hangi görünümü aldığını söyler (`view`). Google hesabı bir şey kazandırmaz: testlerimizde oturum açık bir profil birebir aynı veriyi döndürdü. Bkz. [Hesapsız tam görünüm](docs/tr/full-view.md).
 - **Ayrıntılı, tarihli yorumlar (isteğe bağlı):** yorumcu, yıldız (yalnız yıldız verilenler dahil), tam metin, işletme yanıtı, beğeni, yorum fotoğrafları, alt puanlar ve diğer detaylar (`Yiyecek: 5`, kişi başı fiyat …), düzenleme ve "Google tarafından çevrildi" işaretleri. Her yorumun **kesin yayın tarihi** (`date_iso`), Google'ın sayfaya gönderdiği veriden okunur ve ekrandaki "2 ay önce" etiketiyle doğrulanır; okunamazsa yaklaşık tarih (`date_estimate`) ve hassasiyeti verilir. İsteğe bağlı **en yeniden eskiye** sıralama (`reviewSort: 'newest'`); liste sonuna kadar sayfalandığı için bütün yorumlar okunabilir.
 - **Tek bağlantıyla sorgu:** Google Maps bağlantısını `readPlaceUrl` ya da `gmaps-place --url ...` komutuna verin — `maps.app.goo.gl` paylaşım bağlantıları, tüm Google ülke alan adları (`google.com.tr` …), `?cid=` bağlantıları ve Menü/Yorumlar sekmesi açıkken kopyalanan bağlantılar kabul edilir.
 - İşletme galerisinden **genel fotoğraflar**; menü fotoğrafları, profil resimleri ve aynı görselin farklı boyutları ayıklanır.
@@ -237,7 +232,7 @@ Ayrıntılı dokümantasyon [`docs/tr/`](docs/tr/README.md) altında: [hesapsız
 
 | Fonksiyon | Döndürdüğü |
 |---|---|
-| `launchBrowser(options?)` | Puppeteer tarayıcısı. Seçenekler: `executablePath`, `userDataDir` (kalıcı profil, önerilir), `cookiesFile` (isteğe bağlı), `headless` (varsayılan `true`). |
+| `launchBrowser(options?)` | Puppeteer tarayıcısı. Seçenekler: `executablePath`, `userDataDir` (kalıcı profil, önerilir), `headless` (varsayılan `true`). |
 | `newMapsPage(browser)` | Maps için hazırlanmış sayfa (masaüstü user agent, Türkçe arayüz). |
 | `searchPlaces(page, { location, keyword?, limit?, maxScrolls? })` | `{ status, places: [{ source_id, name, google_maps_url }], truncated }`. `limit` en fazla 60. |
 | `readPlace(page, place, { includeReviews?, maxReviews?, maxReviewScrolls?, reviewSort?, maxImages?, maxMenuImages?, maxScrolls?, recoverView?, onProgress? })` | İşletme ve Hakkında bilgileri ile `menu`, `photos`, isteğe bağlı `reviews`, `view`, `warnings` ve `data_quality`. Yorumlar varsayılan kapalıdır; sınır 100'dür ve 10.000'e kadar yükseltilebilir. `recoverView` (varsayılan `true`) sınırlı görünümü onarır. |
@@ -247,18 +242,18 @@ Ayrıntılı dokümantasyon [`docs/tr/`](docs/tr/README.md) altında: [hesapsız
 | `scan(browser, { location, keyword?, limit?, known?, maxImages?, maxMenuImages?, includeReviews?, maxReviews?, maxReviewScrolls? })` | Arama ve detay tek çağrıda; istenirse yorumları da çeker ve normalize kayıtlarla `{ status, items, skipped_known }` döner. `known` listesindeki işletmeler (`{ source: 'google_maps_browser', source_id }`) atlanır. |
 | `toObservation(place, detail)` | `readPlace` sonucunu `assets`, `menu_assets` ve istenirse yorumları içeren tek kayda (`schema_version: 'gmaps.place.v1'`) çevirir. |
 
-Yardımcılar: `normalizePlaceUrl(url)` (tarayıcı açmadan bağlantıyı denetler), `fullImageUrl(url)` (Google fotoğraf adresinin büyük hali), `placeIdentity(url)`, `pageStatus(page)`, `sessionState(page)`, `passConsent(page)`, `parseRelativeAge(label)`, `estimateReviewDate(label)`, `checkView(browser, url?)` (`{ view, renewed }`, sınırlı görünümü onarır), `refreshSession(browser)` (`{ session, rotated }`).
-Alt yollar: `gmaps-place-reader/media`, `/details`, `/reviews`, `/cookies`.
+Yardımcılar: `normalizePlaceUrl(url)` (tarayıcı açmadan bağlantıyı denetler), `fullImageUrl(url)` (Google fotoğraf adresinin büyük hali), `placeIdentity(url)`, `pageStatus(page)`, `passConsent(page)`, `parseRelativeAge(label)`, `estimateReviewDate(label)`, `checkView(browser, url?)` (`{ view, renewed }`, sınırlı görünümü onarır).
+Alt yollar: `gmaps-place-reader/media`, `/details`, `/reviews`.
 
 Yorum seçenekleri: `includeReviews` (varsayılan `false`), `maxReviews` (100, en fazla 10.000), `maxReviewScrolls` (25, en fazla 1.000 — her adım yaklaşık 10 yorum yükler), `reviewSort` (`relevant` · `newest` · `highest` · `lowest`). Yorum alanları: `review_id`, `author`, `author_summary`, `rating`, `text`, `date_label`, `date_iso`, `date_estimate`, `date_precision` (`exact`, `day`, `week`, `month`, `year` …), `edited`, `edited_estimate` (düzenlenmiş yorumun yaklaşık düzenlenme tarihi), `translated`, `photos`, `owner_response`, `likes`, `language`, `details` (yorumun altındaki yapılandırılmış satırlar: `{ name: 'Yiyecek', value: '5' }` gibi alt puanlar ve `{ name: 'Kişi başı fiyat', value: '₺400–600' }` gibi satırlar). `reviews` sonucu ayrıca `sort_label` ve `sort_applied` bildirir; istenen sıralama seçilemezse `warnings` içinde `REVIEW_SORT_NOT_APPLIED` olur.
 
-Her sonuçta `view` (`full` · `limited` · `unknown`) ve `session` (`signed_in` · `signed_out` · `unknown`) bulunur. Çerez yüklendiği hâlde Google oturumu kapalı gösteriyorsa `warnings` içinde `COOKIES_NOT_SIGNED_IN` olur. Her fonksiyon, seçenek ve alan: [docs/tr/api.md](docs/tr/api.md), [docs/tr/data.md](docs/tr/data.md).
+Her sonuçta `view` (`full` · `limited` · `unknown`) bulunur. Her fonksiyon, seçenek ve alan: [docs/tr/api.md](docs/tr/api.md), [docs/tr/data.md](docs/tr/data.md).
 
-**Durumlar:** `ok`, `incomplete` (bazı kısımlar okunamadı, `warnings`e bakın), `limited_view`, `auth_required`, `consent_required`, `blocked`, `unavailable`. Sık uyarılar: `MENU_PHOTOS_UNAVAILABLE` (menü ürünleri okundu ama menü fotoğraf albümü açılamadı), `REVIEWS_UNAVAILABLE`, `REVIEW_SORT_NOT_APPLIED`, `COOKIES_NOT_SIGNED_IN` ve sizin koyduğunuz sınır bir listeyi durdurduysa `…_LIMIT_OR_SCROLL_LIMIT`.
+**Durumlar:** `ok`, `incomplete` (bazı kısımlar okunamadı, `warnings`e bakın), `limited_view`, `auth_required`, `consent_required`, `blocked`, `unavailable`. Sık uyarılar: `MENU_PHOTOS_UNAVAILABLE` (menü ürünleri okundu ama menü fotoğraf albümü açılamadı), `REVIEWS_UNAVAILABLE`, `REVIEW_SORT_NOT_APPLIED`, `LIMITED_VIEW` ve sizin koyduğunuz sınır bir listeyi durdurduysa `…_LIMIT_OR_SCROLL_LIMIT`.
 
 ### Komut satırı
 
-Komutlar stdout'a tek bir JSON yanıt yazar (hata durumunda çıkış kodu `2` ve `error_code`). `MAPS_PROFILE_DIR`'i kalıcı bir profile ayarlayın; çerez gerekmez. Bütün bayraklar ve alanlar: [docs/tr/cli.md](docs/tr/cli.md).
+Komutlar stdout'a tek bir JSON yanıt yazar (hata durumunda çıkış kodu `2` ve `error_code`). `MAPS_PROFILE_DIR`'i kalıcı bir profile ayarlayın; hesap ya da çerez kullanılmaz. Bütün bayraklar ve alanlar: [docs/tr/cli.md](docs/tr/cli.md).
 
 ```bash
 # Linkle tek mekân: detaylar, menü, fotoğraflar ve tarihleriyle en yeni 300 yorum
@@ -269,11 +264,7 @@ echo '{"schema_version":"gmaps.scan.request.v1","location":"Kadıköy, İstanbul
   | MAPS_PROFILE_DIR=/mutlak/ozel/profil npx gmaps-scan
 
 # Profili tam görünümde tutmak (cron, saatte bir): çıkış kodu 0 = tam görünüm, 3 = sınırlı
-MAPS_PROFILE_DIR=/mutlak/ozel/profil npx gmaps-session check
-
-# İsteğe bağlı oturum: normal bir Chrome penceresinde bir kez oturum açın ya da çerez dışa aktarımını yükleyin
-MAPS_PROFILE_DIR=/mutlak/ozel/profil npx gmaps-login
-MAPS_PROFILE_DIR=/mutlak/ozel/profil npx gmaps-session import ./google-cookies.json
+MAPS_PROFILE_DIR=/mutlak/ozel/profil npx gmaps-view
 ```
 
 ### Yapılandırma
@@ -281,10 +272,9 @@ MAPS_PROFILE_DIR=/mutlak/ozel/profil npx gmaps-session import ./google-cookies.j
 | Ortam değişkeni | Seçenek | Amaç |
 |---|---|---|
 | `MAPS_CHROME_PATH` | `executablePath` | Chrome ya da Chromium dosyası |
-| `MAPS_COOKIES_FILE` | `cookiesFile` | İsteğe bağlı Google çerez dışa aktarımı (Cookie-Editor JSON, Firefox için Cookie Quick Manager, Puppeteer çerezleri ya da Playwright storage state). Yalnız `google.com` ve `google.com.tr` çerezleri yüklenir. Tam görünüm için gerekmez. |
 | `MAPS_PROFILE_DIR` | `userDataDir` | Kalıcı, özel tarayıcı profili (mutlak yol). **Önerilir:** tam görünümü korur. |
 
-Öncelik: komut satırı, ardından JSON istek (`cookies_file`), ardından ortam değişkeni. Hata mesajları dosya yolu, çerez adı ya da değeri içermez; `cookie_stats` yalnız sayıları verir.
+Komut satırı bayrakları ve JSON istek alanları ortam değişkenlerinden önce gelir.
 
 ### Hesapsız tam görünüm
 
@@ -292,16 +282,16 @@ Google Maps oturumsuz tarayıcılara ya **sınırlı görünüm** (Menü sekmesi
 
 - **Kalıcı bir profil kullanın** (`MAPS_PROFILE_DIR` / `userDataDir`). Anonim kimlik orada saklanır.
 - **Sınırlı görünüm mü geldi?** `readPlace` mekânı bir kez yeniden yükler. Profilde hâlâ sınırlı bir kimlik varsa, en çok altı yeni geçici profilden tam görünüm veren bir kimlik getirir. Hiçbiri alamazsa mekân `limited_view` ve `view: 'limited'` ile döner; o tarayıcıdaki sonraki mekânlar için yeniden denenmez.
-- **`gmaps-session check`'i saatte bir çalıştırın** (cron). `"view"` bildirir, sınırlı görünümü onarır ve yalnız tam görünümde `0` ile çıkar.
-- **Oturum isteğe bağlıdır.** Google, çerezleri başka bir makineye taşınan oturumları iptal eder (testlerimizde birkaç dakika ile iki saat arasında). Yine de isterseniz ayrı bir hesap kullanın: ekranı olan bilgisayarda `gmaps-login` ya da `gmaps-session import <cookies.json>`.
+- **`gmaps-view`'u saatte bir çalıştırın** (cron). `"view"` bildirir, sınırlı görünümü onarır ve yalnız tam görünümde `0` ile çıkar.
+- **Hesap yok, çerez dosyası yok.** Okuyucu hiçbir zaman oturum açmaz ve çerez yüklemez. Testlerimizde oturum açık bir profil aynı veriyi döndürdü; Google da çerezleri başka bir makineye taşınan oturumları iptal ediyor (birkaç dakika ile iki saat arasında).
 
 Ayrıntılar, ölçümler ve ipuçları: [docs/tr/full-view.md](docs/tr/full-view.md).
 
-Her durumda Chrome ya da Chromium gerekir. Görünmez modda çalıştığı için masaüstü gerekmez; Linux'ta root olarak değil, normal bir kullanıcıyla çalıştırın. Çerez dosyalarını ve profil klasörünü gizli tutun.
+Her durumda Chrome ya da Chromium gerekir. Görünmez modda çalıştığı için masaüstü gerekmez; Linux'ta root olarak değil, normal bir kullanıcıyla çalıştırın. Profil klasörünü gizli tutun.
 
 ### Sınırlar
 
-- **Türkçe** Google Maps arayüzünü okur: her Maps adresi `hl=tr` ile açılır, bu yüzden sunucunun dili ve hesabın dili önemli değildir. İngilizce etiketler de tanınır.
+- **Türkçe** Google Maps arayüzünü okur: her Maps adresi `hl=tr` ile açılır, bu yüzden sunucunun ve tarayıcının dili önemli değildir. İngilizce etiketler de tanınır.
 - Google, Maps sayfa yapısını sık değiştirir; seçicilerin güncellenmesi gerekebilir. Böyle bir durumda yanlış veri yerine `unavailable` ya da `incomplete` alırsınız.
 - Arama yarıçapı kesin bir filtre değildir; "yakın" olanı Maps metin araması belirler.
 - Kesin yorum tarihleri Google'ın kendi sayfa verisinden gelir ve yalnız görünen etiketle uyuşursa kabul edilir; eşleşmezse `date_estimate` etiketten hesaplanır, `date_precision` ne kadar kaba olduğunu söyler. Düzenlenmiş yorumda etiket düzenleme yaşını gösterir, `date_iso` ise ilk yayın tarihidir. Sayfalama sınırları `truncated` ve `coverage_complete` alanlarında belirtilir. Binlerce yorum okumak dakikalar sürer (adım başına ~10 yorum).

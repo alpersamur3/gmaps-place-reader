@@ -2,7 +2,7 @@
 
 [Türkçe](tr/cli.md) · [Docs index](README.md)
 
-All commands print one JSON object to stdout. They exit with `0` on success and `2` on errors (with `error_code`); `gmaps-session` and `gmaps-login` use `3` for "not full view" / "not signed in". Configuration comes from flags, then the JSON request, then the environment (`MAPS_CHROME_PATH`, `MAPS_PROFILE_DIR`, `MAPS_COOKIES_FILE`).
+All commands print one JSON object to stdout. They exit with `0` on success and `2` on errors (with `error_code`); `gmaps-view` uses `3` for "not the full view". Configuration comes from flags, then the JSON request, then the environment (`MAPS_CHROME_PATH`, `MAPS_PROFILE_DIR`). No account is used and no cookies are loaded.
 
 ## gmaps-place — one place by link
 
@@ -19,7 +19,6 @@ MAPS_PROFILE_DIR=/srv/gmaps/profile npx gmaps-place --url "https://maps.app.goo.
 | `--max-review-scrolls <n>` | `max_review_scrolls` | 25 | Each step loads about 10 reviews; up to 1,000. |
 | `--sort <order>` | `review_sort` | `relevant` | `relevant` · `newest` · `highest` · `lowest`. |
 | `--max-images <n>` | `max_images` | 8 | Limit for menu album photos and for general photos (1–200). |
-| `--cookies-file <file>` | `cookies_file` | — | Optional cookie export (see [Full view](full-view.md#sessions-optional)). |
 
 Without `--url`, one JSON request is read from stdin:
 
@@ -38,7 +37,7 @@ Response (`schema_version: "gmaps.place.response.v1"`):
 | `reviews` | Review records (empty without `--reviews`). |
 | `menu_assets`, `assets` | Menu album photos and general photos, large URLs. |
 | `menu_items`, `menu_categories` | Menu tab items and categories. |
-| `warnings`, `menu_status`, `source_error`, `cookie_stats` | Details for diagnosis; `cookie_stats` only counts cookies. |
+| `warnings`, `menu_status`, `source_error` | Details for diagnosis. |
 
 ## gmaps-scan — search and read several places
 
@@ -47,30 +46,21 @@ echo '{"schema_version":"gmaps.scan.request.v1","location":"Kadıköy, İstanbul
   | MAPS_PROFILE_DIR=/srv/gmaps/profile npx gmaps-scan
 ```
 
-Request fields: `location` (required), `keyword` (default `restoran`), `limit` (1–60, default 20), `known` (`[{ "source": "google_maps_browser", "source_id": "…" }]` to skip), `maxImages`, `maxMenuImages`, `maxScrolls`, `includeReviews`, `maxReviews`, `maxReviewScrolls`, `reviewSort`, `cookiesFile`.
+Request fields: `location` (required), `keyword` (default `restoran`), `limit` (1–60, default 20), `known` (`[{ "source": "google_maps_browser", "source_id": "…" }]` to skip), `maxImages`, `maxMenuImages`, `maxScrolls`, `includeReviews`, `maxReviews`, `maxReviewScrolls`, `reviewSort`.
 
-Response (`schema_version: "gmaps.scan.v1"`): `status` (`ok` or `incomplete` when a place could not be read completely), `items` (one [observation](data.md#observation-gmapsplacev1) per place), `skipped_known`, `search` (`status`, `truncated`, `requested_limit`), `cookie_stats`.
+Response (`schema_version: "gmaps.scan.v1"`): `status` (`ok` or `incomplete` when a place could not be read completely), `items` (one [observation](data.md#observation-gmapsplacev1) per place), `skipped_known`, `search` (`status`, `truncated`, `requested_limit`).
 
-## gmaps-session — keep a profile healthy
+## gmaps-view — keep a profile in the full view
 
 ```bash
-MAPS_PROFILE_DIR=/srv/gmaps/profile npx gmaps-session check                     # view + session, repairs a limited view
-MAPS_PROFILE_DIR=/srv/gmaps/profile npx gmaps-session check --place "<link>"    # check with another place
-MAPS_PROFILE_DIR=/srv/gmaps/profile npx gmaps-session import ./cookies.json     # optional: load a cookie export once
+MAPS_PROFILE_DIR=/srv/gmaps/profile npx gmaps-view                     # reports the view, repairs a limited one
+MAPS_PROFILE_DIR=/srv/gmaps/profile npx gmaps-view --place "<link>"    # check with another place
 ```
 
-Output: `{ "status": "ok", "command", "session": "signed_in" | "signed_out" | "unknown", "rotated", "view": "full" | "limited" | …, "renewed", "profile", "cookie_stats" }`.
+Output: `{ "status": "ok", "view": "full" | "limited" | …, "renewed", "profile" }`. `--profile <absolute dir>` overrides `MAPS_PROFILE_DIR`.
 
-Exit code `0` = full view, `3` = not full, `2` = error. Run `check` hourly from cron: it repairs a limited view, and for signed-in profiles it waits for Google's cookie rotation (up to 60 s). See [Full view](full-view.md).
-
-## gmaps-login — optional sign-in on a computer with a screen
-
-```powershell
-$env:MAPS_PROFILE_DIR = "C:\gmaps-profile"; npx gmaps-login
-```
-
-Opens the installed Chrome as an ordinary (not automated) window with the profile. Sign in, close the window, and the command checks the profile headlessly. Default profile: `~/.gmaps-place-reader/profile`; `--profile <absolute dir>` overrides it. Exit code `0` = signed in, `3` = not.
+Exit code `0` = full view, `3` = not full, `2` = error. Run it hourly from cron; see [Full view](full-view.md).
 
 ## Error codes
 
-`CHROME_PATH_REQUIRED` (set `MAPS_CHROME_PATH`), `MAPS_PROFILE_PATH_MUST_BE_ABSOLUTE`, `INVALID_MAPS_URL`, `INVALID_SCHEMA`, `INVALID_ARGUMENT`, `INPUT_TOO_LARGE`, `LOCATION_REQUIRED`, `MAPS_COOKIES_FILE_REQUIRED`, `MAPS_COOKIES_FILE_UNREADABLE`, `MAPS_COOKIES_FILE_TOO_LARGE`, `MAPS_COOKIES_INVALID_JSON`, `MAPS_COOKIES_INVALID_FORMAT`, `MAPS_COOKIES_EMPTY`, `MAPS_COOKIES_REJECTED`, `BROWSER_FAILED` (anything else). Errors never contain file paths, cookie names or values.
+`CHROME_PATH_REQUIRED` (set `MAPS_CHROME_PATH`), `MAPS_PROFILE_PATH_MUST_BE_ABSOLUTE`, `INVALID_MAPS_URL`, `INVALID_SCHEMA`, `INVALID_ARGUMENT`, `INPUT_TOO_LARGE`, `LOCATION_REQUIRED`, `BROWSER_FAILED` (anything else). Errors never contain file paths.

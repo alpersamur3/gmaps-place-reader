@@ -2,13 +2,13 @@
 
 [English](../api.md) · [Doküman dizini](README.md)
 
-Yalnız ESM: `import { … } from 'gmaps-place-reader'`. Alt yol dışa aktarımları: `gmaps-place-reader/media`, `/details`, `/reviews`, `/cookies`.
+Yalnız ESM: `import { … } from 'gmaps-place-reader'`. Alt yol dışa aktarımları: `gmaps-place-reader/media`, `/details`, `/reviews`.
 
 ## Tarayıcı
 
 | Fonksiyon | Açıklama |
 |---|---|
-| `launchBrowser(options?)` | Chrome/Chromium'u `puppeteer-core` ile başlatır. Seçenekler: `executablePath` (ya da `MAPS_CHROME_PATH`; Windows'taki varsayılan kurulum kendiliğinden bulunur), `userDataDir` (ya da `MAPS_PROFILE_DIR`; mutlak yol, **önerilir**), `cookiesFile` (ya da `MAPS_COOKIES_FILE`; isteğe bağlı), `headless` (varsayılan `true`). Tarayıcı `mapsCookieStats` taşır (yalnız sayılar). |
+| `launchBrowser(options?)` | Chrome/Chromium'u `puppeteer-core` ile başlatır. Seçenekler: `executablePath` (ya da `MAPS_CHROME_PATH`; Windows'taki varsayılan kurulum kendiliğinden bulunur), `userDataDir` (ya da `MAPS_PROFILE_DIR`; mutlak yol, **önerilir**), `headless` (varsayılan `true`). Hesap kullanılmaz, çerez yüklenmez. |
 | `newMapsPage(browser)` | Maps için hazırlanmış sayfa: kurulu Chrome'un masaüstü user agent'ı (asla `HeadlessChrome` değil) ve Türkçe arayüz. |
 | `chromeExecutable(options?)` | `launchBrowser`'ın kullanacağı Chrome yolu. |
 
@@ -46,14 +46,11 @@ Yalnız ESM: `import { … } from 'gmaps-place-reader'`. Alt yol dışa aktarım
 | `readReviews(page, { overviewUrl, reviewCount, maxReviews, maxScrolls, sort, onProgress })` | Google gönderdiğinde kesin tarihleriyle yorumlar ([alanlar](data.md#yorumlar-placereviews)). |
 | `extractPlaceDetails(page)`, `extractAboutDetails(page)` (`/details`) | İşletme bilgileri, Hakkında özellikleri. |
 
-## Görünüm ve oturum
+## Görünüm
 
 | Fonksiyon | Açıklama |
 |---|---|
 | `checkView(browser, url = VIEW_CHECK_PLACE)` | Bir mekânı açar, sınırlı görünümü onarır: `{ view: 'full' \| 'limited' \| …, renewed }`. |
-| `refreshSession(browser, { rotationWaitMs = 60000 })` | `{ session, rotated }`; oturum açıksa Google'ın çerez yenilemesini bekler. |
-| `checkSession(browser)` | `refreshSession(…).session`. |
-| `sessionState(page)` | `signed_in` · `signed_out` · `unknown`. |
 | `mintFullViewCookies(executablePath, { attempts = 6, place })` | Yeni geçici profillerden tam görünüm veren anonim kimlik çerezleri ya da `null`. |
 | `nextViewStep(state)` | Onarım kararı (`reload` · `renew` · `stop`), testler için dışa aktarılır. |
 | `VIEW_CHECK_PLACE` | `checkView`'ın kullandığı iyi bilinen mekân. |
@@ -71,4 +68,3 @@ Yalnız ESM: `import { … } from 'gmaps-place-reader'`. Alt yol dışa aktarım
 | `photoMonth(label)`, `viewerPhoto(href)` (`/media`) | Fotoğraf görüntüleyici tarih etiketi → `YYYY-AA`, görüntüleyici URL'si → `{ id, url, width, height }`. |
 | `parseRelativeAge(label)`, `estimateReviewDate(label)` | "2 ay önce" → `{ amount, unit, edited }` → `{ date, precision }`. |
 | `reviewsPageUrl(url)`, `editMapsData(data, edit)` (`/reviews`) | Yorumlar derin linki; iç içe sayaçları tutarlı kalacak şekilde bir `data=` yolunu düzenler. |
-| `normalizeGoogleCookies(input)`, `loadGoogleCookies(options)` (`/cookies`) | Cookie-Editor, Cookie Quick Manager, Puppeteer ve Playwright dışa aktarımları → Puppeteer çerezleri; yalnız `google.com` ve `google.com.tr`. |

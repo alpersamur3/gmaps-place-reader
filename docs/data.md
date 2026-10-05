@@ -10,7 +10,6 @@ What `readPlace` / `readPlaceUrl` return, and the flat record `toObservation` / 
 |---|---|
 | `status` | `ok` · `incomplete` (some parts could not be read, see `warnings`) · `limited_view` · `consent_required` · `auth_required` · `blocked` · `unavailable`. |
 | `view`, `view_renewed` | `full` · `limited` · `unknown`, and how many anonymous ids were brought in for this place ([Full view](full-view.md)). |
-| `session` | `signed_in` · `signed_out` · `unknown`. |
 | `source_id` | Stable identity: feature id (`0x…:0x…`), else `cid:…` or `place:…`. |
 | `google_maps_url` | The canonical link that was read (always with `hl=tr`). |
 | `name`, `address`, `phone`, `website`, `menu_url` | Business details as Maps shows them. |

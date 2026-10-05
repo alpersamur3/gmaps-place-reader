@@ -4,10 +4,10 @@
 
 | Sayfa | İçerik |
 |---|---|
-| [Hesapsız tam görünüm](full-view.md) | Google neden sınırlı görünüm gösterir, anonim kimlik çerezi (`__Secure-ENID` / `NID`), okuyucu tam görünümü nasıl korur, test sonuçları, isteğe bağlı oturumlar. |
+| [Hesapsız tam görünüm](full-view.md) | Google neden sınırlı görünüm gösterir, anonim kimlik çerezi (`__Secure-ENID` / `NID`), okuyucu tam görünümü nasıl korur, test sonuçları, neden hesap kullanılmadığı. |
 | [API başvurusu](api.md) | Her fonksiyon ve seçenek. |
 | [Veri başvurusu](data.md) | Mekân, menü, fotoğraf, yorum ve kayıtların her alanı. |
-| [Komut satırı](cli.md) | `gmaps-place`, `gmaps-scan`, `gmaps-session`, `gmaps-login`, istek ve yanıt JSON'ları, hata kodları. |
+| [Komut satırı](cli.md) | `gmaps-place`, `gmaps-scan`, `gmaps-view`, istek ve yanıt JSON'ları, hata kodları. |
 | [Durumlar, uyarılar ve sorun giderme](troubleshooting.md) | Her durumun ve uyarının anlamı ve ne yapılacağı. |
 
 ## Hızlı tarifler
@@ -39,5 +39,5 @@ MAPS_PROFILE_DIR=/srv/gmaps/profile npx gmaps-place --url "https://maps.app.goo.
 Profili tam görünümde tutmak (cron, saatte bir):
 
 ```bash
-MAPS_PROFILE_DIR=/srv/gmaps/profile npx gmaps-session check   # çıkış 0 = tam görünüm
+MAPS_PROFILE_DIR=/srv/gmaps/profile npx gmaps-view   # çıkış 0 = tam görünüm
 ```
