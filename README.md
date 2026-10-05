@@ -134,14 +134,13 @@ Priority: command-line flag, then the JSON request (`cookies_file`), then the en
 
 ### Full view and sessions
 
-Google Maps serves anonymous browsers either a **limited view** (no Menu tab, so no menu items or prices, often no menu album, fewer details, sometimes no Reviews tab) or the **full view**. In our tests the choice was made by one cookie, `__Secure-ENID`: Google issues it in one of the two classes, and it keeps that class for its lifetime (about 13 months). It works from any IP address, but only with a user agent of the operating system it was issued for.
+Google Maps serves anonymous browsers either a **limited view** (no Menu tab, so no menu items or prices, often no menu album, fewer details, sometimes no Reviews tab) or the **full view**. In our tests the choice was made by the browser's anonymous id cookie: `__Secure-ENID` in the EU consent region, `NID` elsewhere. Google issues each id in one of the two classes, about every second new id in the full one, and the id keeps its class for its lifetime (ENID about 13 months, NID about 6). Signing in does not change the class. An id works from any IP address, but only with a user agent of the operating system it was issued for.
 
 **Without an account (recommended for servers):**
 
-- Use a persistent profile (`MAPS_PROFILE_DIR` / `userDataDir`). In the EU consent region Google issues an ENID with the first Maps page (the reader picks "Reject all" on the consent page).
-- When a place comes back limited, `readPlace` reloads it once. If the profile still holds a limited ENID, it brings in a full-view ENID from a fresh temporary profile. About two in three new profiles get one; up to four are tried. The profile keeps the full view from then on. The option `recoverView: false` turns this off.
+- Use a persistent profile (`MAPS_PROFILE_DIR` / `userDataDir`). Google issues the id with the first Maps page (in the EU after the consent page, where the reader picks "Reject all").
+- When a place comes back limited, `readPlace` reloads it once. If the profile still holds a limited id, it brings in a full-view id from fresh temporary profiles (up to six are tried). The profile keeps the full view from then on. The option `recoverView: false` turns this off.
 - Run `gmaps-session check` hourly from cron. It reports `"view": "full" | "limited"`, repairs a limited view (`"renewed"`), and exits with `0` only for the full view.
-- Outside the EU, Google usually issues no ENID at all. Use a session there, or import an ENID that was issued on the same operating system (`gmaps-session import`).
 
 **With a session:** use a **separate** Google account (never your personal one) and keep its session in the persistent profile.
 
@@ -308,14 +307,13 @@ npx gmaps-place --url "https://maps.app.goo.gl/mekan-linki" --reviews --sort new
 
 ### Tam görünüm ve oturumlar
 
-Google Maps, oturumsuz tarayıcılara ya **sınırlı görünüm** sunar ya da **tam görünüm**. Sınırlı görünümde Menü sekmesi yoktur, dolayısıyla ürün ve fiyat gelmez; menü albümü çoğu zaman yoktur, daha az detay gelir ve bazen Yorumlar sekmesi de görünmez. Testlerimizde bu seçimi tek bir çerez belirledi: `__Secure-ENID`. Google bu çerezi iki sınıftan birinde verir ve çerez ömrü boyunca (yaklaşık 13 ay) o sınıfta kalır. Her IP adresinden çalışır, ama yalnız verildiği işletim sisteminin user agent'ıyla.
+Google Maps, oturumsuz tarayıcılara ya **sınırlı görünüm** sunar ya da **tam görünüm**. Sınırlı görünümde Menü sekmesi yoktur, dolayısıyla ürün ve fiyat gelmez; menü albümü çoğu zaman yoktur, daha az detay gelir ve bazen Yorumlar sekmesi de görünmez. Testlerimizde bu seçimi tarayıcının anonim kimlik çerezi belirledi: AB'nin çerez onayı bölgesinde `__Secure-ENID`, başka yerlerde `NID`. Google her kimliği iki sınıftan birinde verir (yeni kimliklerin yaklaşık yarısı tam sınıftır) ve kimlik ömrü boyunca o sınıfta kalır (ENID yaklaşık 13 ay, NID yaklaşık 6 ay). Oturum açmak sınıfı değiştirmez. Kimlik her IP adresinden çalışır, ama yalnız verildiği işletim sisteminin user agent'ıyla.
 
 **Hesapsız (sunucular için önerilir):**
 
-- Kalıcı bir profil kullanın (`MAPS_PROFILE_DIR` / `userDataDir`). AB'nin çerez onayı bölgesinde Google ENID'yi ilk Maps sayfasıyla verir (okuyucu onay sayfasında "Tümünü reddet"i seçer).
-- Bir mekân sınırlı görünümle gelirse `readPlace` sayfayı bir kez yeniden yükler. Profilde hâlâ sınırlı bir ENID varsa, yeni ve geçici bir profilden tam görünüm veren bir ENID getirir. Yeni profillerin yaklaşık üçte ikisi böyle bir ENID alır; en çok dört profil denenir. Profil bundan sonra tam görünümde kalır. `recoverView: false` seçeneği bunu kapatır.
+- Kalıcı bir profil kullanın (`MAPS_PROFILE_DIR` / `userDataDir`). Google kimliği ilk Maps sayfasıyla verir (AB'de onay sayfasından sonra; okuyucu orada "Tümünü reddet"i seçer).
+- Bir mekân sınırlı görünümle gelirse `readPlace` sayfayı bir kez yeniden yükler. Profilde hâlâ sınırlı bir kimlik varsa, yeni ve geçici profillerden tam görünüm veren bir kimlik getirir (en çok altı profil denenir). Profil bundan sonra tam görünümde kalır. `recoverView: false` seçeneği bunu kapatır.
 - `gmaps-session check` komutunu cron ile saatte bir çalıştırın. Komut `"view": "full" | "limited"` bildirir, sınırlı görünümü onarır (`"renewed"`) ve yalnız tam görünümde `0` ile çıkar.
-- AB dışında Google çoğu zaman hiç ENID vermez. Orada oturum kullanın ya da aynı işletim sisteminde verilmiş bir ENID'yi içe aktarın (`gmaps-session import`).
 
 **Oturumla:** **ayrı** bir Google hesabı kullanın (asla kişisel hesabınızı değil) ve oturumunu kalıcı profilde tutun.
 
