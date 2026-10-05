@@ -169,7 +169,9 @@ export async function searchPlaces(page, { location, keyword = 'restoran', limit
   // Maps sometimes opens a single place rather than a list.
   if (!places.size && page.url().includes('/maps/place/')) {
     const url = safeMapsUrl(page.url()), id = placeIdentity(url);
-    if (id) places.set(id, { source_id: id, name: cap(await page.title(), 200), google_maps_url: url });
+    // The page title carries the product name: "Name - Google Haritalar".
+    const title = (await page.title()).replace(/\s+[-–]\s+(?:google haritalar|google maps)$/i, '');
+    if (id) places.set(id, { source_id: id, name: cap(title, 200), google_maps_url: url });
   }
   return { status: places.size ? (status === 'limited_view' ? 'limited_view' : 'ok') : 'unavailable',
     places: [...places.values()].slice(0, limit), truncated: !exhausted, requested_limit: limit };
@@ -416,8 +418,11 @@ export async function readPlace(page, place, { maxImages = 12, maxMenuImages = 2
   catch { menu = { status: 'unavailable', images: [], categories: [], coverage_complete: false }; warnings.push('MENU_READ_FAILED'); }
   // A limited view shows only part of the menu album (often a single photo), so it is never complete.
   if (status !== 'ok') menu.coverage_complete = false;
-  try { photos = await readPhotos(page, { maxImages, maxScrolls, overviewUrl: canonical, exclude: (menu.images || []).map(row => row.url) }); }
-  catch { photos = { status: 'unavailable', images: [], coverage_complete: false }; warnings.push('PHOTOS_READ_FAILED'); }
+  // A navigation during the gallery read (rare) destroys the page context; one more try from the overview.
+  for (let attempt = 0; attempt < 2 && !photos; attempt++) {
+    try { photos = await readPhotos(page, { maxImages, maxScrolls, overviewUrl: canonical, exclude: (menu.images || []).map(row => row.url) }); }
+    catch { if (attempt) { photos = { status: 'unavailable', images: [], coverage_complete: false }; warnings.push('PHOTOS_READ_FAILED'); } }
+  }
   if (includeReviews) {
     try { reviews = await readReviews(page, { overviewUrl: canonical, reviewCount: details.review_count,
       maxReviews, maxScrolls: maxReviewScrolls, sort: reviewSort, onProgress }); }
@@ -510,7 +515,8 @@ export async function scan(browser, { location, keyword = 'restoran', limit = 20
     if (!['ok', 'limited_view'].includes(found.status)) return { status: found.status, items: [], skipped_known: 0 };
     if (!Array.isArray(known)) throw new Error('INVALID_SCHEMA');
     const knownIds = new Set(known.filter(item => item?.source === 'google_maps_browser').map(item => item.source_id));
-    const items = []; let skipped = 0, incomplete = found.status !== 'ok';
+    // A fresh profile's first page can be a limited view; the place list is the same, each place reports its own view.
+    const items = []; let skipped = 0, incomplete = !['ok', 'limited_view'].includes(found.status);
     for (const place of found.places) {
       if (knownIds.has(place.source_id)) { skipped++; continue; }
       try {
