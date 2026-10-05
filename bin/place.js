@@ -60,7 +60,7 @@ try {
     place, reviews: detail.reviews?.reviews || [],
     menu_assets: larger(detail.menu?.images), assets: larger(detail.photos?.images),
     menu_items: detail.menu?.items || [], menu_categories: detail.menu?.categories || [],
-    detail_status: detail.status, menu_status: detail.menu?.status, warnings: detail.warnings,
+    detail_status: detail.status, view: detail.view, menu_status: detail.menu?.status, warnings: detail.warnings,
     source_error: detail.status === 'ok' ? undefined : detail.status, cookie_stats: browser.mapsCookieStats }));
 } catch (error) {
   const code = ['CHROME_PATH_REQUIRED', 'MAPS_PROFILE_PATH_MUST_BE_ABSOLUTE', 'INVALID_MAPS_URL',

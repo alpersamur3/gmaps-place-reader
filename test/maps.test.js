@@ -37,6 +37,8 @@ test('observation keeps Menu photos separate and never verifies rights or menu r
   assert.equal(observation.menu_assets[0].rights_confirmed, false);
   assert.equal(observation.menu_assets[0].preview_url, 'https://lh3.googleusercontent.com/menu');
   assert.equal(observation.phone, '0242 111 22 33');
+  assert.equal(observation.view, 'unknown');
+  assert.equal(toObservation(place, { ...detail, view: 'full' }).view, 'full');
 });
 
 test('menu tab yields text categories and strip size; strip thumbnails are not the album', async () => {

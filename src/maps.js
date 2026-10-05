@@ -399,13 +399,16 @@ export async function readPlace(page, place, { maxImages = 12, maxMenuImages = 2
   if (!target) throw new Error('INVALID_MAPS_URL');
   await navigatePlace(page, target);
   let status = await pageStatus(page);
-  if (status === 'limited_view' && recoverView) ({ status } = await recoverFullView(page, target, status));
+  let renewed = 0;
+  if (status === 'limited_view' && recoverView) ({ status, renewed } = await recoverFullView(page, target, status));
+  // Which view Google served this place in: 'full', 'limited' or 'unknown' (consent, sign-in or block pages).
+  const view = { view: status === 'ok' ? 'full' : status === 'limited_view' ? 'limited' : 'unknown', view_renewed: renewed };
   const canonical = safeMapsUrl(page.url()) || target;
   const session = await sessionState(page);
   const identity = placeIdentity(canonical) || placeIdentity(target);
-  if (!['ok', 'limited_view'].includes(status)) return { status, session, source_id: identity, google_maps_url: canonical };
+  if (!['ok', 'limited_view'].includes(status)) return { status, session, ...view, source_id: identity, google_maps_url: canonical };
   const details = await extractPlaceDetails(page);
-  if (details.data_status !== 'ok') return { status: 'unavailable', session, source_id: identity, google_maps_url: canonical };
+  if (details.data_status !== 'ok') return { status: 'unavailable', session, ...view, source_id: identity, google_maps_url: canonical };
   try {
     const about = await extractAboutDetails(page);
     details.description ||= about.description;
@@ -450,7 +453,7 @@ export async function readPlace(page, place, { maxImages = 12, maxMenuImages = 2
   if (photos.truncated) warnings.push('PHOTO_IMAGE_LIMIT_OR_SCROLL_LIMIT');
   // Hitting our own image limits is not a source failure; the warnings still record it.
   const finalStatus = status !== 'ok' ? status : warnings.some(code => !code.endsWith('_LIMIT_OR_SCROLL_LIMIT')) ? 'incomplete' : 'ok';
-  return { status: finalStatus, session, source_id: identity, google_maps_url: canonical, ...details, menu, photos,
+  return { status: finalStatus, session, ...view, source_id: identity, google_maps_url: canonical, ...details, menu, photos,
     ...(includeReviews ? { reviews } : {}),
     warnings: [...new Set(warnings)], data_quality: { partial: finalStatus !== 'ok',
       review_count_observed: !!details.review_label, menu_coverage_complete: !!menu.coverage_complete,
@@ -493,7 +496,7 @@ export function toObservation(place, detail, { keyword = '', location = '' } = {
     menu_items: detail.menu?.items || [], menu_categories: detail.menu?.categories || [],
     reviews: detail.reviews?.reviews || [], review_coverage_complete: !!detail.reviews?.coverage_complete,
     place_id: detail.place_id || '', cid: detail.cid || '',
-    data_quality: detail.data_quality || { partial: !ok }, warnings: detail.warnings || [],
+    data_quality: detail.data_quality || { partial: !ok }, warnings: detail.warnings || [], view: detail.view || 'unknown',
     review_count: reviewCount, rating, photo_count: new Set([...images, ...menus].map(row => imageIdentity(row.url)).filter(Boolean)).size,
     photo_count_scope: images.length || menus.length ? 'lower_bound' : 'unknown',
     photo_coverage_complete: false, photo_usability_verified: false, contact_coverage_complete: false,
