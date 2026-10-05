@@ -237,18 +237,40 @@ async function navigatePlace(page, target) {
 }
 
 /** Opens Maps once and reports whether Google treats this browser (profile) as signed in. */
-export async function checkSession(browser) {
+export async function checkSession(browser, options) {
+  return (await refreshSession(browser, options)).session;
+}
+
+/**
+ * Opens Maps once: { session, rotated }. A signed-in Maps page asks accounts.google.com to rotate the session
+ * cookies once they are due (POST /RotateCookies, observed 8 to 45 seconds after loading); staying until that
+ * request completes stores the fresh cookies in the profile. An idle profile that never rotates them is signed out
+ * within hours. rotated: false only means no rotation was due during the wait.
+ */
+export async function refreshSession(browser, { rotationWaitMs = 60000 } = {}) {
   const page = await newMapsPage(browser);
+  let rotated = false;
+  const onResponse = response => {
+    if (/^https:\/\/accounts\.google\.com\/RotateCookies(?:[?#]|$)/.test(response.url()) && response.ok()) rotated = true;
+  };
+  page.on('response', onResponse);
   try {
     await page.goto('https://www.google.com/maps?hl=tr', { waitUntil: 'domcontentloaded' });
     await passConsent(page);
     await page.waitForFunction(() => [...document.querySelectorAll('a, button')].some(el =>
       /^(?:google hesabı|google account)/i.test(el.getAttribute('aria-label') || '') || /^(?:oturum açın|sign in)$/i.test((el.innerText || '').trim())),
       { timeout: 15000 }).catch(() => {});
-    // A short stay lets Google rotate the session cookies; the profile keeps the fresh ones.
     await sleep(3000);
-    return await sessionState(page);
-  } finally { await page.close(); }
+    const session = await sessionState(page);
+    if (session === 'signed_in') {
+      const deadline = Date.now() + Math.max(0, Number(rotationWaitMs) || 0);
+      while (!rotated && Date.now() < deadline) await sleep(500);
+    }
+    return { session, rotated };
+  } finally {
+    page.off('response', onResponse);
+    await page.close();
+  }
 }
 
 /** Whether Google shows this browser session as signed in (account button) or signed out. */
