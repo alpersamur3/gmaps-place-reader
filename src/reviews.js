@@ -478,7 +478,9 @@ async function collectReviews(page, { overviewUrl = '', reviewCount = 0, maxRevi
     if (onProgress) await onProgress({ stage: 'reviews', ...result }, page);
     return result;
   }
-  const sortLabel = sort === 'relevant' ? '' : await applySort(page, sort);
+  let sortLabel = sort === 'relevant' ? '' : await applySort(page, sort);
+  // On a slow page the menu can close before the choice registers: one more try.
+  if (SORT_LABELS[sort] && sort !== 'relevant' && !SORT_LABELS[sort].test(sortLabel)) sortLabel = await applySort(page, sort);
 
   const reviews = new Map();
   let exhausted = false, limitReached = false, scrolls = 0, stalled = 0;
