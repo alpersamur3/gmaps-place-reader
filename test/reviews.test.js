@@ -207,3 +207,94 @@ test('"newest" sort is chosen from Google\'s sort menu before reading', async ()
     assert.deepEqual(result.reviews.map(row => row.review_id), ['new']);
   } finally { await page.close(); await browser.close(); }
 });
+
+test('hidden overview snippets do not count as the review list, and a late sort button is still used', async () => {
+  const browser = await launchBrowser();
+  const page = await browser.newPage();
+  try {
+    await page.setContent(`<main role="main"><div role="tablist"><button role="tab">Genel Bakış</button>
+      <button role="tab" id="reviews">Yorumlar</button><button role="tab">Hakkında</button></div>
+      <div style="display:none"><div class="jftiEf" data-review-id="snippet"><span class="d4r55">Özet</span>
+        <span role="img" aria-label="5 yıldız"></span><span class="wiI7pd">Genel bakış özeti</span></div></div>
+      <input aria-label="Yorumlarda ara"><div id="menu"></div><div id="list" style="height:300px;overflow:auto"></div>
+      <script>
+        const card = (id, label) => '<div class="jftiEf" data-review-id="' + id + '"><span class="d4r55">' + id + '</span>' +
+          '<span role="img" aria-label="5 yıldız"></span><span class="rsqaWe">' + label + '</span><span class="wiI7pd">Metin ' + id + '</span></div>';
+        // The real list and its sort button render a moment after the search box.
+        setTimeout(() => { document.querySelector('#list').innerHTML = card('relevant', 'bir yıl önce'); }, 700);
+        setTimeout(() => {
+          const sort = document.createElement('button'); sort.id = 'sort'; sort.textContent = 'En alakalı';
+          document.querySelector('main').insertBefore(sort, document.querySelector('#menu'));
+          sort.onclick = () => { document.querySelector('#menu').innerHTML = '<div role="menuitemradio" id="newest">En yeni</div>';
+            document.querySelector('#newest').onclick = () => { sort.textContent = 'En yeni'; document.querySelector('#menu').innerHTML = '';
+              document.querySelector('#list').innerHTML = card('newest', '2 gün önce'); }; };
+        }, 1600);
+      </script></main>`);
+    const result = await readReviews(page, { reviewCount: 1, maxReviews: 5, maxScrolls: 1, waitMs: 100, sort: 'newest' });
+    assert.equal(result.status, 'found', JSON.stringify(result));
+    assert.equal(result.sort_label, 'En yeni');
+    assert.equal(result.sort_applied, true);
+    assert.deepEqual(result.reviews.map(row => row.review_id), ['newest']);
+  } finally { await page.close(); await browser.close(); }
+});
+
+test('a requested order that Maps does not offer is reported as not applied', async () => {
+  const browser = await launchBrowser();
+  const page = await browser.newPage();
+  try {
+    await page.setContent(`<main role="main"><div role="tablist"><button role="tab">Genel Bakış</button>
+      <button role="tab">Yorumlar</button><button role="tab">Hakkında</button></div>
+      <button>En alakalı</button><div style="height:300px;overflow:auto"><div class="jftiEf" data-review-id="a"><span class="d4r55">A</span>
+        <span role="img" aria-label="4 yıldız"></span><span class="rsqaWe">bir ay önce</span><span class="wiI7pd">Yorum</span></div></div></main>`);
+    const result = await readReviews(page, { reviewCount: 1, maxReviews: 5, maxScrolls: 1, waitMs: 100, sort: 'newest' });
+    assert.equal(result.status, 'found');
+    assert.equal(result.sort_label, 'En alakalı');
+    assert.equal(result.sort_applied, false);
+  } finally { await page.close(); await browser.close(); }
+});
+
+test('Maps data edits keep every enclosing count consistent', async () => {
+  const { editMapsData } = await import('../src/reviews.js');
+  // Search results carry an extra !19s place id after !16s inside the same group.
+  assert.equal(editMapsData('!4m7!3m6!1s0x1:0x2!8m2!3d1!4d2!16s%2Fg%2Fx!19sChIJabc', { insertBefore: token => /^16s/.test(token), insert: ['9m1', '1b1'] }),
+    '!4m9!3m8!1s0x1:0x2!8m2!3d1!4d2!9m1!1b1!16s%2Fg%2Fx!19sChIJabc');
+  assert.equal(editMapsData('!3m4!1sA!8m2!3d1!4d2!5m1!1e1', { remove: token => token === '4d2' }), '!3m3!1sA!8m1!3d1!5m1!1e1');
+  assert.equal(editMapsData('!3m1!1sA', { insertBefore: token => /^16s/.test(token), insert: ['9m1'] }), '');
+});
+
+test('an early Reviews tab click lost before Maps wires it is retried; overview snippets are not the list', async () => {
+  const browser = await launchBrowser();
+  const page = await browser.newPage();
+  try {
+    const card = id => `<div class="jftiEf" data-review-id="${id}"><span class="d4r55">${id}</span>
+      <span role="img" aria-label="5 yıldız"></span><span class="rsqaWe">bir ay önce</span><span class="wiI7pd">Metin ${id}</span></div>`;
+    await page.setContent(`<main role="main"><div role="tablist"><button role="tab" aria-selected="true">Genel Bakış</button>
+      <button role="tab" id="reviews" aria-selected="false">Yorumlar</button><button role="tab">Hakkında</button></div>
+      <section id="overview"><input aria-label="Yorumlarda arayın">${['s1', 's2', 's3'].map(card).join('')}</section>
+      <section id="list" hidden><button>En alakalı</button><div style="height:300px;overflow:auto">${['r1', 'r2', 'r3', 'r4', 'r5'].map(card).join('')}</div></section>
+      <script>
+        // Maps wires the tab a moment after drawing it: the first click does nothing.
+        setTimeout(() => { document.querySelector('#reviews').onclick = event => {
+          event.currentTarget.setAttribute('aria-selected', 'true');
+          document.querySelector('#overview').hidden = true; document.querySelector('#list').hidden = false; }; }, 800);
+      </script></main>`);
+    const result = await readReviews(page, { reviewCount: 5, maxReviews: 10, maxScrolls: 1, waitMs: 100 });
+    assert.deepEqual(result.reviews.map(row => row.review_id), ['r1', 'r2', 'r3', 'r4', 'r5']);
+  } finally { await page.close(); await browser.close(); }
+});
+
+test('overview snippets are never returned as reviews while the Reviews tab stays unselected', async () => {
+  const browser = await launchBrowser();
+  const page = await browser.newPage();
+  try {
+    const card = id => `<div class="jftiEf" data-review-id="${id}"><span class="d4r55">${id}</span>
+      <span role="img" aria-label="5 yıldız"></span><span class="rsqaWe">bir ay önce</span><span class="wiI7pd">Metin ${id}</span></div>`;
+    await page.setContent(`<main role="main"><div role="tablist"><button role="tab" aria-selected="true">Genel Bakış</button>
+      <button role="tab" aria-selected="false">Yorumlar</button><button role="tab" aria-selected="false">Hakkında</button></div>
+      <input aria-label="Yorumlarda arayın">${['s1', 's2', 's3'].map(card).join('')}</main>`);
+    const result = await readReviews(page, { reviewCount: 50, maxReviews: 10, maxScrolls: 1, waitMs: 100, listTimeoutMs: 1500 });
+    assert.equal(result.status, 'unavailable', JSON.stringify(result));
+    assert.equal(result.reason, 'REVIEW_CARDS_NOT_LOADED');
+    assert.equal(result.reviews.length, 0);
+  } finally { await page.close(); await browser.close(); }
+});

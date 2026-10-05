@@ -301,7 +301,9 @@ export async function readPlace(page, place, { maxImages = 12, maxMenuImages = 2
   if (menu.status === 'unavailable') warnings.push(menu.reason || 'MENU_UNAVAILABLE');
   if (menu.status === 'empty') warnings.push('MENU_IMAGES_NOT_LOADED');
   if (photos.status === 'unavailable') warnings.push('PHOTOS_UNAVAILABLE');
-  if (includeReviews && (reviews.status === 'unavailable' || (reviews.status === 'empty' && details.review_count > 0))) warnings.push('REVIEWS_UNAVAILABLE');
+  // A rating means the place has reviews even when a limited view hides their count.
+  if (includeReviews && (reviews.status === 'unavailable' || (reviews.status === 'empty' && (details.review_count > 0 || details.rating > 0)))) warnings.push('REVIEWS_UNAVAILABLE');
+  if (includeReviews && reviews.status === 'found' && reviews.sort_applied === false) warnings.push('REVIEW_SORT_NOT_APPLIED');
   if (reviews?.truncated) warnings.push('REVIEWS_LIMIT_OR_SCROLL_LIMIT');
   if (menu.truncated) warnings.push('MENU_IMAGE_LIMIT_OR_SCROLL_LIMIT');
   if (photos.truncated) warnings.push('PHOTO_IMAGE_LIMIT_OR_SCROLL_LIMIT');

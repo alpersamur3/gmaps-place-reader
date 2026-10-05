@@ -180,45 +180,93 @@ function readReviewCardsDom() {
   }).filter(row => row.review_id && (row.text || row.rating));
 }
 
+// Serialized by Puppeteer: the place's Reviews tab → 'none' | 'selected' | 'clicked' ('idle' when click is false).
+function reviewsTabState(click) {
+  const normalize = value => String(value || '').trim().toLocaleLowerCase('tr').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ı/g, 'i');
+  const tabs = [...document.querySelectorAll('[role="tab"]')].filter(tab => tab.getClientRects().length);
+  const tablist = tabs.find(tab => {
+    const list = tab.closest('[role="tablist"]');
+    if (!list) return false;
+    const names = [...list.querySelectorAll('[role="tab"]')].map(item => normalize(item.textContent));
+    return names.some(name => /^(?:genel bakis|overview)$/.test(name)) &&
+      names.some(name => /^(?:hakkinda|about)$/.test(name));
+  })?.closest('[role="tablist"]');
+  const tab = [...(tablist?.querySelectorAll('[role="tab"]') || [])].find(item => /^(?:yorumlar|reviews)$/.test(normalize(item.textContent)));
+  if (!tab) return 'none';
+  if (tab.getAttribute('aria-selected') === 'true') return 'selected';
+  // Maps always marks the selected tab; without the attribute the switch cannot be checked.
+  if (!tab.hasAttribute('aria-selected')) {
+    if (click) tab.click();
+    return 'unverifiable';
+  }
+  if (!click) return 'idle';
+  tab.click();
+  return 'clicked';
+}
+
+/**
+ * The tab is drawn before Maps wires its click handler, so an early click is lost while the Overview, with its own
+ * review search box and a few review cards, stays on screen. Retry until the tab really is selected.
+ */
 async function openReviewsTab(page) {
-  return page.evaluate(() => {
-    const normalize = value => String(value || '').trim().toLocaleLowerCase('tr').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ı/g, 'i');
-    const tabs = [...document.querySelectorAll('[role="tab"]')].filter(tab => tab.getClientRects().length);
-    const tablist = tabs.find(tab => {
-      const list = tab.closest('[role="tablist"]');
-      if (!list) return false;
-      const names = [...list.querySelectorAll('[role="tab"]')].map(item => normalize(item.textContent));
-      return names.some(name => /^(?:genel bakis|overview)$/.test(name)) &&
-        names.some(name => /^(?:hakkinda|about)$/.test(name));
-    })?.closest('[role="tablist"]');
-    if (!tablist) return false;
-    const tab = [...tablist.querySelectorAll('[role="tab"]')].find(item => /^(?:yorumlar|reviews)$/.test(normalize(item.textContent)));
-    if (!tab) return false;
-    if (tab.getAttribute('aria-selected') !== 'true') tab.click();
-    return true;
-  });
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const state = await page.evaluate(reviewsTabState, true).catch(() => 'none');
+    if (state === 'none') return attempt > 0;
+    if (state === 'selected' || state === 'unverifiable') return true;
+    const selected = await page.waitForFunction(`(${reviewsTabState})(false) === 'selected'`, { timeout: 1200 })
+      .then(() => true, () => false);
+    if (selected) return true;
+  }
+  return true;
 }
 
 /**
  * The Overview tab also shows a few review snippets with the same card markup. The real list is
  * only ready once the Reviews tab is selected and its own controls (search box / sort menu) render.
  */
-async function waitForReviewList(page, timeout) {
-  return page.waitForFunction(() => {
-    const visible = node => !!node && node.getClientRects().length > 0;
-    const controls = [...document.querySelectorAll('input, button')].some(node => visible(node) &&
-      /^(?:yorumlarda ara|search reviews|en alakalı|en yeni|en yüksek|en düşük|most relevant|newest|highest|lowest)/i.test(
-        (node.getAttribute('aria-label') || node.getAttribute('placeholder') || node.innerText || '').trim()));
-    const cards = document.querySelectorAll('.jftiEf[data-review-id]').length;
-    const empty = /no reviews|henüz yorum yok|yorum bulunamadı/i.test(document.body?.innerText || '');
-    return controls && (cards > 0 || empty);
-  }, { timeout }).then(() => true, () => false);
+// Serialized by Puppeteer. strict: the Overview's own review search box and snippet cards (ids in `snippets`)
+// do not count; the list is ready once a sort control or a card that was not a snippet is visible.
+function reviewListReady(snippets, strict) {
+  const visible = node => !!node && node.getClientRects().length > 0;
+  const label = node => (node.getAttribute('aria-label') || node.getAttribute('placeholder') || node.innerText || '').trim();
+  const controls = [...document.querySelectorAll('input, button')].filter(visible).map(label);
+  const search = controls.some(text => /^(?:yorumlarda ara|search reviews)/i.test(text));
+  const sort = controls.some(text => /^(?:en alakalı|en yeni|en yüksek|en düşük|most relevant|newest|highest|lowest)/i.test(text));
+  // Overview snippets stay in the DOM (hidden) after switching tabs: only visible cards count.
+  const cards = [...document.querySelectorAll('.jftiEf[data-review-id]')].filter(visible).map(card => card.getAttribute('data-review-id'));
+  const empty = /no reviews|henüz yorum yok|yorum bulunamadı/i.test(document.body?.innerText || '');
+  if (!search && !sort) return false;
+  if (empty) return true;
+  if (!strict) return cards.length > 0;
+  return cards.length > 0 && (sort || cards.some(id => !snippets.includes(id)));
 }
+
+/**
+ * The Overview also shows a review search box and a few review cards. Right after the tab switch they can still be
+ * on screen, so the list counts as ready only once it differs from them; after the timeout a plain check decides.
+ */
+async function waitForReviewList(page, timeout, snippets = []) {
+  // A Reviews tab that exists but is not selected means the Overview (or another tab) is on screen.
+  const check = strict => `(${reviewsTabState})(false) !== 'idle' && (${reviewListReady})(${JSON.stringify(snippets)}, ${strict})`;
+  const ready = await page.waitForFunction(check(true), { timeout }).then(() => true, () => false);
+  return ready || page.evaluate(check(false)).catch(() => false);
+}
+
+/** Review cards visible on the Overview before switching tabs (none when the Reviews tab is already selected). */
+const overviewSnippets = page => page.evaluate(`(${reviewsTabState})(false) === 'selected' ? [] :
+  [...document.querySelectorAll('.jftiEf[data-review-id]')].filter(card => card.getClientRects().length).map(card => card.getAttribute('data-review-id'))`)
+  .catch(() => []);
 
 /** Choose a review order from Google's sort menu; returns the label shown afterwards ('' when not possible). */
 async function applySort(page, sort) {
   const target = SORT_LABELS[sort];
   if (!target) return '';
+  // The sort button can render a moment after the search box that marks the list as ready.
+  await page.waitForFunction(source => {
+    const labels = new RegExp(source, 'i');
+    return [...document.querySelectorAll('button')].some(node => node.getClientRects().length &&
+      labels.test((node.innerText || node.getAttribute('aria-label') || '').trim()));
+  }, { timeout: 6000 }, Object.values(SORT_LABELS).map(regex => regex.source).join('|')).catch(() => {});
   const current = await page.evaluate(source => {
     const labels = new RegExp(source, 'i');
     return [...document.querySelectorAll('button')].filter(node => node.getClientRects().length)
@@ -280,7 +328,7 @@ async function expandReviewText(page) {
  */
 async function loadMoreReviews(page, waitMs) {
   const before = await page.evaluate(() => {
-    const cards = document.querySelectorAll('.jftiEf[data-review-id]');
+    const cards = [...document.querySelectorAll('.jftiEf[data-review-id]')].filter(card => card.getClientRects().length);
     const last = cards[cards.length - 1];
     let node = last?.parentElement, scroller = null;
     while (node && node !== document.body) {
@@ -293,8 +341,8 @@ async function loadMoreReviews(page, waitMs) {
     return { scroller: true, count: cards.length };
   });
   if (!before.scroller) return { scroller: false, grew: false };
-  const grew = await page.waitForFunction(count => document.querySelectorAll('.jftiEf[data-review-id]').length > count,
-    { timeout: waitMs * 4 }, before.count).then(() => true, () => false);
+  const grew = await page.waitForFunction(count => [...document.querySelectorAll('.jftiEf[data-review-id]')]
+    .filter(card => card.getClientRects().length).length > count, { timeout: waitMs * 4 }, before.count).then(() => true, () => false);
   return { scroller: true, grew };
 }
 
@@ -384,17 +432,25 @@ async function collectReviews(page, { overviewUrl = '', reviewCount = 0, maxRevi
   maxReviews = Math.max(1, Math.min(10000, Math.floor(Number(maxReviews) || 100)));
   maxScrolls = Math.max(1, Math.min(1000, Math.floor(Number(maxScrolls) || 25)));
   waitMs = Math.max(100, Math.min(3000, Math.floor(Number(waitMs) || 650)));
+  const deepLink = overviewUrl ? reviewsPageUrl(overviewUrl) : '';
+  let snippets = await overviewSnippets(page);
   let opened = await openReviewsTab(page);
-  if (!opened && overviewUrl) {
+  let loaded = opened && await waitForReviewList(page, listTimeoutMs, snippets);
+  // Limited views hide the Reviews tab but still open Google's own review deep link. Signed-in sessions can land
+  // on the Overview there, so the tab is opened on that page too.
+  if (!loaded && deepLink) {
+    await page.goto(deepLink, { waitUntil: 'domcontentloaded', timeout: 25000 }).catch(() => {});
+    await page.waitForFunction(() => !!document.querySelector('[role="tab"]'), { timeout: 10000 }).catch(() => {});
+    snippets = await overviewSnippets(page);
+    opened = await openReviewsTab(page) || opened;
+    loaded = await waitForReviewList(page, Math.min(listTimeoutMs, 10000), snippets);
+  }
+  if (!loaded && overviewUrl) {
     await page.goto(overviewUrl, { waitUntil: 'domcontentloaded', timeout: 25000 }).catch(() => {});
     await page.waitForFunction(() => !!document.querySelector('[role="tab"]'), { timeout: 10000 }).catch(() => {});
-    opened = await openReviewsTab(page);
-  }
-  let loaded = opened && await waitForReviewList(page, listTimeoutMs);
-  // Some sessions hide the Reviews tab but still open Google's own review deep link.
-  if (!loaded && overviewUrl && reviewsPageUrl(overviewUrl)) {
-    await page.goto(reviewsPageUrl(overviewUrl), { waitUntil: 'domcontentloaded', timeout: 25000 }).catch(() => {});
-    loaded = await waitForReviewList(page, Math.min(listTimeoutMs, 10000));
+    snippets = await overviewSnippets(page);
+    opened = await openReviewsTab(page) || opened;
+    loaded = opened && await waitForReviewList(page, listTimeoutMs, snippets);
   }
   if (!loaded) {
     const currentStatus = await pageStatus(page).catch(() => 'unavailable');
@@ -438,5 +494,6 @@ async function collectReviews(page, { overviewUrl = '', reviewCount = 0, maxRevi
   const truncated = !knownComplete && (limitReached || !exhausted || knownTotal > rows.length);
   return { status: rows.length ? 'found' : 'empty', reviews: rows, total_count: knownTotal,
     collected_count: rows.length, requested_limit: maxReviews, scrolls, sort_label: finalSort,
+    sort_applied: sort === 'relevant' || !SORT_LABELS[sort] || SORT_LABELS[sort].test(finalSort),
     truncated, coverage_complete: rows.length > 0 && (knownComplete || (exhausted && !knownTotal)) };
 }
