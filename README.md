@@ -21,7 +21,7 @@
 
 ### Contents
 
-[Features](#features) · [Install](#install) · [Quick start](#quick-start) · [API](#api) · [Command line](#command-line) · [Configuration](#configuration) · [Cookies](#cookies-recommended) · [Limitations](#limitations) · [Disclaimer](#disclaimer)
+[Features](#features) · [Install](#install) · [Quick start](#quick-start) · [API](#api) · [Command line](#command-line) · [Configuration](#configuration) · [Full view and sessions](#full-view-and-sessions) · [Limitations](#limitations) · [Disclaimer](#disclaimer)
 
 ### Features
 
@@ -86,7 +86,7 @@ try {
 | `scan(browser, { location, keyword?, limit?, known?, maxImages?, maxMenuImages?, includeReviews?, maxReviews?, maxReviewScrolls? })` | Search and details in one call; optionally collects reviews and returns `{ status, items, skipped_known }` with normalized records. Places listed in `known` (`{ source: 'google_maps_browser', source_id }`) are skipped. |
 | `toObservation(place, detail)` | Flattens a `readPlace` result into one record (`schema_version: 'gmaps.place.v1'`) with `assets`, `menu_assets` and optional reviews. |
 
-Helpers: `normalizePlaceUrl(url)` (check a link before launching a browser), `fullImageUrl(url)` (large variant of a Google photo URL), `placeIdentity(url)`, `pageStatus(page)`, `sessionState(page)`, `passConsent(page)`, `parseRelativeAge(label)`, `estimateReviewDate(label)`.
+Helpers: `normalizePlaceUrl(url)` (check a link before launching a browser), `fullImageUrl(url)` (large variant of a Google photo URL), `placeIdentity(url)`, `pageStatus(page)`, `sessionState(page)`, `passConsent(page)`, `parseRelativeAge(label)`, `estimateReviewDate(label)`, `checkView(browser, url?)` (`{ view, renewed }`, repairs a limited view), `refreshSession(browser)` (`{ session, rotated }`).
 Subpath exports: `gmaps-place-reader/media`, `/details`, `/reviews`, `/cookies`.
 
 Review options: `includeReviews` (default `false`), `maxReviews` (100, up to 10,000), `maxReviewScrolls` (25, up to 1,000 — each step loads about 10 reviews), `reviewSort` (`relevant` · `newest` · `highest` · `lowest`). Review fields: `review_id`, `author`, `author_summary`, `rating`, `text`, `date_label`, `date_iso`, `date_estimate`, `date_precision` (`exact`, `day`, `week`, `month`, `year` …), `edited`, `edited_estimate` (approximate edit date of an edited review), `translated`, `photos`, `owner_response`, `likes`, `language`, `details` (the structured lines under a review: sub-ratings such as `{ name: 'Yiyecek', value: '5' }` and rows such as `{ name: 'Kişi başı fiyat', value: '₺400–600' }`). The `reviews` result also reports `sort_label` and `sort_applied`; when the requested order could not be chosen, `warnings` contains `REVIEW_SORT_NOT_APPLIED`.
@@ -113,7 +113,7 @@ MAPS_PROFILE_DIR=/absolute/private/profile npx gmaps-login
 
 # Servers / SSH: load an exported cookie file into a profile once, then check it any time
 MAPS_PROFILE_DIR=/absolute/private/profile npx gmaps-session import ./google-cookies.json
-MAPS_PROFILE_DIR=/absolute/private/profile npx gmaps-session check   # exit code 0 = signed in, 3 = not; run it hourly to keep the session rotated
+MAPS_PROFILE_DIR=/absolute/private/profile npx gmaps-session check   # exit code 0 = full view, 3 = limited; run it hourly, it also repairs the view
 ```
 
 You can also pass a place URL directly and request detailed reviews:
@@ -132,28 +132,34 @@ npx gmaps-place --url "https://maps.app.goo.gl/your-place-link" --reviews --sort
 
 Priority: command-line flag, then the JSON request (`cookies_file`), then the environment. Errors never include file paths, cookie names or values; `cookie_stats` only reports counts.
 
-### Cookies (recommended)
+### Full view and sessions
 
-Without cookies, Google Maps often serves a **limited view**: no Menu tab (so no menu items or prices), fewer details, and sometimes a gallery without categories, which means **no menu album** either. Server and datacenter IP addresses are limited or blocked more often, and EU addresses first get a consent page.
+Google Maps serves anonymous browsers either a **limited view** (no Menu tab, so no menu items or prices, often no menu album, fewer details, sometimes no Reviews tab) or the **full view**. In our tests the choice was made by one cookie, `__Secure-ENID`: Google issues it in one of the two classes, and it keeps that class for its lifetime (about 13 months). It works from any IP address, but only with a user agent of the operating system it was issued for.
 
-Use a **separate** Google account (never your personal one) and keep its session in a persistent profile (`MAPS_PROFILE_DIR` / `userDataDir`). Every read then refreshes the session inside that profile.
+**Without an account (recommended for servers):**
 
-- **Computer with a screen:** `gmaps-login` opens your installed Chrome as an ordinary window (not automated — Google refuses sign-ins in automated browsers). Sign in, **close the window**, and the command checks the profile headlessly and prints whether it is signed in.
+- Use a persistent profile (`MAPS_PROFILE_DIR` / `userDataDir`). In the EU consent region Google issues an ENID with the first Maps page (the reader picks "Reject all" on the consent page).
+- When a place comes back limited, `readPlace` reloads it once. If the profile still holds a limited ENID, it brings in a full-view ENID from a fresh temporary profile. About two in three new profiles get one; up to four are tried. The profile keeps the full view from then on. The option `recoverView: false` turns this off.
+- Run `gmaps-session check` hourly from cron. It reports `"view": "full" | "limited"`, repairs a limited view (`"renewed"`), and exits with `0` only for the full view.
+- Outside the EU, Google usually issues no ENID at all. Use a session there, or import an ENID that was issued on the same operating system (`gmaps-session import`).
+
+**With a session:** use a **separate** Google account (never your personal one) and keep its session in the persistent profile.
+
+- **Computer with a screen:** `gmaps-login` opens your installed Chrome as an ordinary window (not automated — Google refuses sign-ins in automated browsers). Sign in, **close the window**, and the command checks the profile headlessly.
 
   ```powershell
   # Windows PowerShell
   $env:MAPS_PROFILE_DIR = "C:\gmaps-profile"; npx gmaps-login
   ```
 
-- **Server or SSH, no screen:** sign in on any computer, export the cookies with a browser extension such as Cookie-Editor, copy the file to the server and run `gmaps-session import <file>` once. Delete the file afterwards; the profile keeps the session. `gmaps-session check` tells you later whether it is still signed in; when it is, the command stays on Maps until Google has rotated the session cookies (`"rotated": true`), so running it **every hour from cron** also keeps the session alive.
-- **Imported sessions can be revoked.** In our tests Google signed a session out between a few minutes and about two hours after its cookies were moved to a server (another IP address and browser), also when the session was exported from a private window and not used anywhere else. Prefer signing in on the machine that runs the reader (`gmaps-login`), check imported sessions with `gmaps-session check` and expect to import again. A persistent profile without a session often still gets the full place details on a server.
-- Passing `cookiesFile` / `MAPS_COOKIES_FILE` on every run also works, but exported cookies go stale sooner than a profile, because Chrome binds Google sessions to the device.
+- **Server or SSH:** export the cookies with a browser extension such as Cookie-Editor or Cookie Quick Manager, copy the file to the server and run `gmaps-session import <file>` once, then delete the file.
+- **Imported sessions get revoked.** In our tests Google signed a moved session out between a few minutes and about two hours after it reached a server (another IP address and browser). This happened also when the session came from a private window that was not used again. Sessions live as long as they stay on the machine where they were signed in. A signed-in check also waits for Google's cookie rotation (`"rotated": true`).
 
-Every result reports `session`; `COOKIES_NOT_SIGNED_IN` means the cookies were loaded but Google no longer accepts them. Without a session you typically get far fewer details: no review count, no Menu tab, sometimes no Reviews tab at all.
+Every result reports `session`. `COOKIES_NOT_SIGNED_IN` means the cookies were loaded but Google no longer accepts them.
 
-Chrome or Chromium is needed in every case (it runs headless, no desktop required); on Linux run it as a normal user, not root.
+Chrome or Chromium is needed in every case. It runs headless, so no desktop is required; on Linux run it as a normal user, not root.
 
-Treat the cookie file and the profile folder like passwords: keep them out of repositories, logs and backups.
+Treat cookie files and the profile folder like passwords: keep them out of repositories, logs and backups.
 
 ### Limitations
 
@@ -189,7 +195,7 @@ Issues and pull requests are welcome.
 
 ### İçindekiler
 
-[Özellikler](#özellikler) · [Kurulum](#kurulum) · [Hızlı başlangıç](#hızlı-başlangıç) · [API](#api-1) · [Komut satırı](#komut-satırı) · [Yapılandırma](#yapılandırma) · [Çerezler](#çerezler-önerilir) · [Sınırlar](#sınırlar) · [Sorumluluk reddi](#sorumluluk-reddi)
+[Özellikler](#özellikler) · [Kurulum](#kurulum) · [Hızlı başlangıç](#hızlı-başlangıç) · [API](#api-1) · [Komut satırı](#komut-satırı) · [Yapılandırma](#yapılandırma) · [Tam görünüm ve oturumlar](#tam-görünüm-ve-oturumlar) · [Sınırlar](#sınırlar) · [Sorumluluk reddi](#sorumluluk-reddi)
 
 ### Özellikler
 
@@ -254,7 +260,7 @@ try {
 | `scan(browser, { location, keyword?, limit?, known?, maxImages?, maxMenuImages?, includeReviews?, maxReviews?, maxReviewScrolls? })` | Arama ve detay tek çağrıda; istenirse yorumları da çeker ve normalize kayıtlarla `{ status, items, skipped_known }` döner. `known` listesindeki işletmeler (`{ source: 'google_maps_browser', source_id }`) atlanır. |
 | `toObservation(place, detail)` | `readPlace` sonucunu `assets`, `menu_assets` ve istenirse yorumları içeren tek kayda (`schema_version: 'gmaps.place.v1'`) çevirir. |
 
-Yardımcılar: `normalizePlaceUrl(url)` (tarayıcı açmadan bağlantıyı denetler), `fullImageUrl(url)` (Google fotoğraf adresinin büyük hali), `placeIdentity(url)`, `pageStatus(page)`, `sessionState(page)`, `passConsent(page)`, `parseRelativeAge(label)`, `estimateReviewDate(label)`.
+Yardımcılar: `normalizePlaceUrl(url)` (tarayıcı açmadan bağlantıyı denetler), `fullImageUrl(url)` (Google fotoğraf adresinin büyük hali), `placeIdentity(url)`, `pageStatus(page)`, `sessionState(page)`, `passConsent(page)`, `parseRelativeAge(label)`, `estimateReviewDate(label)`, `checkView(browser, url?)` (`{ view, renewed }`, sınırlı görünümü onarır), `refreshSession(browser)` (`{ session, rotated }`).
 Alt yollar: `gmaps-place-reader/media`, `/details`, `/reviews`, `/cookies`.
 
 Yorum seçenekleri: `includeReviews` (varsayılan `false`), `maxReviews` (100, en fazla 10.000), `maxReviewScrolls` (25, en fazla 1.000 — her adım yaklaşık 10 yorum yükler), `reviewSort` (`relevant` · `newest` · `highest` · `lowest`). Yorum alanları: `review_id`, `author`, `author_summary`, `rating`, `text`, `date_label`, `date_iso`, `date_estimate`, `date_precision` (`exact`, `day`, `week`, `month`, `year` …), `edited`, `edited_estimate` (düzenlenmiş yorumun yaklaşık düzenlenme tarihi), `translated`, `photos`, `owner_response`, `likes`, `language`, `details` (yorumun altındaki yapılandırılmış satırlar: `{ name: 'Yiyecek', value: '5' }` gibi alt puanlar ve `{ name: 'Kişi başı fiyat', value: '₺400–600' }` gibi satırlar). `reviews` sonucu ayrıca `sort_label` ve `sort_applied` bildirir; istenen sıralama seçilemezse `warnings` içinde `REVIEW_SORT_NOT_APPLIED` olur.
@@ -281,7 +287,7 @@ MAPS_PROFILE_DIR=/mutlak/ozel/profil npx gmaps-login
 
 # Sunucu / SSH: dışa aktarılmış çerez dosyasını profile bir kez yükleyin, sonra istediğiniz zaman denetleyin
 MAPS_PROFILE_DIR=/mutlak/ozel/profil npx gmaps-session import ./google-cookies.json
-MAPS_PROFILE_DIR=/mutlak/ozel/profil npx gmaps-session check   # çıkış kodu 0 = oturum açık, 3 = değil; oturumun yenilenmesi için saatte bir çalıştırın
+MAPS_PROFILE_DIR=/mutlak/ozel/profil npx gmaps-session check   # çıkış kodu 0 = tam görünüm, 3 = sınırlı; saatte bir çalıştırın, görünümü de onarır
 ```
 
 Mekan bağlantısını doğrudan verip ayrıntılı yorumları da isteyebilirsiniz:
@@ -300,28 +306,34 @@ npx gmaps-place --url "https://maps.app.goo.gl/mekan-linki" --reviews --sort new
 
 Öncelik: komut satırı, ardından JSON istek (`cookies_file`), ardından ortam değişkeni. Hata mesajları dosya yolu, çerez adı ya da değeri içermez; `cookie_stats` yalnız sayıları verir.
 
-### Çerezler (önerilir)
+### Tam görünüm ve oturumlar
 
-Çerez olmadan Google Maps çoğu zaman **sınırlı görünüm** sunar: Menü sekmesi gelmez (ürün ve fiyat yok), daha az detay gelir ve galeri bazen kategorisiz açılır; bu durumda **menü albümü de okunamaz**. Sunucu ve veri merkezi IP'leri daha sık kısıtlanır ya da engellenir; AB'deki adresler önce çerez onayı sayfası görür.
+Google Maps, oturumsuz tarayıcılara ya **sınırlı görünüm** sunar ya da **tam görünüm**. Sınırlı görünümde Menü sekmesi yoktur, dolayısıyla ürün ve fiyat gelmez; menü albümü çoğu zaman yoktur, daha az detay gelir ve bazen Yorumlar sekmesi de görünmez. Testlerimizde bu seçimi tek bir çerez belirledi: `__Secure-ENID`. Google bu çerezi iki sınıftan birinde verir ve çerez ömrü boyunca (yaklaşık 13 ay) o sınıfta kalır. Her IP adresinden çalışır, ama yalnız verildiği işletim sisteminin user agent'ıyla.
 
-**Ayrı** bir Google hesabı kullanın (asla kişisel hesabınızı değil) ve oturumunu kalıcı bir profilde tutun (`MAPS_PROFILE_DIR` / `userDataDir`). Her okuma, oturumu o profil içinde tazeler.
+**Hesapsız (sunucular için önerilir):**
 
-- **Ekranı olan bilgisayar:** `gmaps-login`, kurulu Chrome'unuzu sıradan bir pencere olarak açar (otomasyonlu değil — Google otomasyonlu tarayıcıda oturum açtırmaz). Oturum açın, **pencereyi kapatın**; komut profili görünmez modda denetler ve oturumun açık olup olmadığını yazar.
+- Kalıcı bir profil kullanın (`MAPS_PROFILE_DIR` / `userDataDir`). AB'nin çerez onayı bölgesinde Google ENID'yi ilk Maps sayfasıyla verir (okuyucu onay sayfasında "Tümünü reddet"i seçer).
+- Bir mekân sınırlı görünümle gelirse `readPlace` sayfayı bir kez yeniden yükler. Profilde hâlâ sınırlı bir ENID varsa, yeni ve geçici bir profilden tam görünüm veren bir ENID getirir. Yeni profillerin yaklaşık üçte ikisi böyle bir ENID alır; en çok dört profil denenir. Profil bundan sonra tam görünümde kalır. `recoverView: false` seçeneği bunu kapatır.
+- `gmaps-session check` komutunu cron ile saatte bir çalıştırın. Komut `"view": "full" | "limited"` bildirir, sınırlı görünümü onarır (`"renewed"`) ve yalnız tam görünümde `0` ile çıkar.
+- AB dışında Google çoğu zaman hiç ENID vermez. Orada oturum kullanın ya da aynı işletim sisteminde verilmiş bir ENID'yi içe aktarın (`gmaps-session import`).
+
+**Oturumla:** **ayrı** bir Google hesabı kullanın (asla kişisel hesabınızı değil) ve oturumunu kalıcı profilde tutun.
+
+- **Ekranı olan bilgisayar:** `gmaps-login`, kurulu Chrome'unuzu sıradan bir pencere olarak açar (otomasyonlu değil — Google otomasyonlu tarayıcıda oturum açtırmaz). Oturum açın, **pencereyi kapatın**; komut profili görünmez modda denetler.
 
   ```powershell
   # Windows PowerShell
   $env:MAPS_PROFILE_DIR = "C:\gmaps-profile"; npx gmaps-login
   ```
 
-- **Sunucu ya da SSH, ekran yok:** herhangi bir bilgisayarda oturum açın, çerezleri Cookie-Editor gibi bir eklentiyle dışa aktarın, dosyayı sunucuya kopyalayıp bir kez `gmaps-session import <dosya>` çalıştırın. Ardından dosyayı silin; oturum profilde kalır. `gmaps-session check` daha sonra oturumun hâlâ açık olup olmadığını söyler; oturum açıksa Google oturum çerezlerini yenileyene kadar Maps'te bekler (`"rotated": true`). Bu yüzden komutu **cron ile saatte bir** çalıştırmak oturumu da canlı tutar.
-- **İçe aktarılan oturumlar iptal edilebilir.** Testlerimizde Google, çerezleri sunucuya (başka IP adresi ve tarayıcı) taşınan bir oturumu birkaç dakika ile yaklaşık iki saat arasında kapattı; oturum gizli pencereden alınıp başka hiçbir yerde kullanılmadığında da. Mümkünse okuyucuyu çalıştıran makinede oturum açın (`gmaps-login`), içe aktarılan oturumu `gmaps-session check` ile denetleyin ve yeniden içe aktarmanız gerekebileceğini hesaba katın. Sunucuda oturumsuz ama kalıcı bir profil de çoğu zaman tam mekân bilgisini alır.
-- Her çalıştırmada `cookiesFile` / `MAPS_COOKIES_FILE` vermek de çalışır; ancak Chrome Google oturumunu cihaza bağladığı için dışa aktarılan çerezler profile göre daha çabuk geçersizleşir.
+- **Sunucu ya da SSH:** çerezleri Cookie-Editor ya da Cookie Quick Manager gibi bir eklentiyle dışa aktarın, dosyayı sunucuya kopyalayıp bir kez `gmaps-session import <dosya>` çalıştırın ve ardından dosyayı silin.
+- **İçe aktarılan oturumlar iptal edilir.** Testlerimizde Google, sunucuya taşınan (başka IP adresi ve tarayıcı) bir oturumu birkaç dakika ile yaklaşık iki saat arasında kapattı. Bu, oturum bir daha kullanılmayan gizli bir pencereden alındığında da oldu. Oturumlar, açıldıkları makinede kaldıkça yaşar. Oturum açık bir denetim, Google'ın çerez yenilemesini de bekler (`"rotated": true`).
 
-Her sonuç `session` bildirir; `COOKIES_NOT_SIGNED_IN`, çerezlerin yüklendiğini ama Google'ın artık kabul etmediğini gösterir. Oturum yokken çok daha az bilgi gelir: yorum sayısı ve Menü sekmesi yoktur, bazen Yorumlar sekmesi de hiç görünmez.
+Her sonuç `session` bildirir. `COOKIES_NOT_SIGNED_IN`, çerezlerin yüklendiğini ama Google'ın artık kabul etmediğini gösterir.
 
-Her durumda Chrome ya da Chromium gerekir (görünmez modda çalışır, masaüstü gerekmez); Linux'ta root olarak değil, normal bir kullanıcıyla çalıştırın.
+Her durumda Chrome ya da Chromium gerekir. Görünmez modda çalıştığı için masaüstü gerekmez; Linux'ta root olarak değil, normal bir kullanıcıyla çalıştırın.
 
-Çerez dosyasını ve profil klasörünü parola gibi saklayın: repoya, günlüklere ve yedeklere koymayın.
+Çerez dosyalarını ve profil klasörünü parola gibi saklayın: repoya, günlüklere ve yedeklere koymayın.
 
 ### Sınırlar
 
