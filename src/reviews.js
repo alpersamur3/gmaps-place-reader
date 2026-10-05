@@ -452,8 +452,8 @@ async function collectReviews(page, { overviewUrl = '', reviewCount = 0, maxRevi
   let snippets = await overviewSnippets(page);
   let opened = await openReviewsTab(page);
   let loaded = opened && await waitForReviewList(page, listTimeoutMs, snippets);
-  // Limited views hide the Reviews tab but still open Google's own review deep link. Signed-in sessions can land
-  // on the Overview there, so the tab is opened on that page too.
+  // Limited views hide the Reviews tab but still open Google's own review deep link. Some views land on the
+  // Overview there, so the tab is opened on that page too.
   if (!loaded && deepLink) {
     await page.goto(deepLink, { waitUntil: 'domcontentloaded', timeout: 25000 }).catch(() => {});
     await page.waitForFunction(() => !!document.querySelector('[role="tab"]'), { timeout: 10000 }).catch(() => {});

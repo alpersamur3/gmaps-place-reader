@@ -31,14 +31,12 @@
     "./media": "./src/media.js",
     "./details": "./src/details.js",
     "./reviews": "./src/reviews.js",
-    "./cookies": "./src/cookies.js",
     "./package.json": "./package.json"
   },
   "bin": {
     "gmaps-scan": "bin/scan.js",
     "gmaps-place": "bin/place.js",
-    "gmaps-login": "bin/login.js",
-    "gmaps-session": "bin/session.js"
+    "gmaps-view": "bin/view.js"
   },
   "files": [
     "src",
@@ -52,7 +50,7 @@
   "scripts": {
     "test": "node --test",
     "scan": "node bin/scan.js",
-    "login": "node bin/login.js"
+    "view": "node bin/view.js"
   },
   "dependencies": {
     "puppeteer-core": "^24.0.0"

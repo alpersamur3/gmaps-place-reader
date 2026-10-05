@@ -1,12 +1,11 @@
 #!/usr/bin/env node
 // JSON on stdin or --url + options → one detailed Google Maps place record on stdout.
 import { launchBrowser, readPlaceUrl, fullImageUrl } from '../src/maps.js';
-import { COOKIE_ERROR_CODES, cookieOptionsFromArgs } from '../src/cookies.js';
 
 let browser;
 try {
   const argv = process.argv.slice(2);
-  const cookieArgs = [], flags = { includeReviews: false };
+  const flags = { includeReviews: false };
   for (let index = 0; index < argv.length; index++) {
     const argument = argv[index];
     const value = name => {
@@ -20,7 +19,7 @@ try {
     else if (argument === '--max-review-scrolls' || argument.startsWith('--max-review-scrolls=')) flags.maxReviewScrolls = Number(value('--max-review-scrolls'));
     else if (argument === '--max-images' || argument.startsWith('--max-images=')) flags.maxImages = Number(value('--max-images'));
     else if (argument === '--sort' || argument.startsWith('--sort=')) flags.reviewSort = value('--sort');
-    else cookieArgs.push(argument);
+    else throw new Error('INVALID_ARGUMENT');
   }
 
   let input;
@@ -36,9 +35,7 @@ try {
   if (input.schema_version && !['gmaps.place.request.v1', 'gmaps.place.request.v2'].includes(input.schema_version)) throw new Error('INVALID_SCHEMA');
   const url = input.google_maps_url || input.url;
   if (!url) throw new Error('INVALID_SCHEMA');
-  const options = cookieOptionsFromArgs(cookieArgs);
-  options.cookiesFile ??= input.cookiesFile ?? input.cookies_file;
-  browser = await launchBrowser(options);
+  browser = await launchBrowser();
   const maxImages = Math.max(1, Math.min(200, Number(flags.maxImages ?? input.max_images) || 8));
   const includeReviews = flags.includeReviews || input.include_reviews === true || input.reviews === true;
   const maxReviews = Math.max(1, Math.min(10000, Number(flags.maxReviews ?? input.max_reviews) || 100));
@@ -61,11 +58,11 @@ try {
     menu_assets: larger(detail.menu?.images), assets: larger(detail.photos?.images),
     menu_items: detail.menu?.items || [], menu_categories: detail.menu?.categories || [],
     detail_status: detail.status, view: detail.view, menu_status: detail.menu?.status, warnings: detail.warnings,
-    source_error: detail.status === 'ok' ? undefined : detail.status, cookie_stats: browser.mapsCookieStats }));
+    source_error: detail.status === 'ok' ? undefined : detail.status }));
 } catch (error) {
   const code = ['CHROME_PATH_REQUIRED', 'MAPS_PROFILE_PATH_MUST_BE_ABSOLUTE', 'INVALID_MAPS_URL',
-    'INVALID_SCHEMA', 'INVALID_ARGUMENT', 'INPUT_TOO_LARGE', ...COOKIE_ERROR_CODES].includes(error?.message) ? error.message : 'BROWSER_FAILED';
+    'INVALID_SCHEMA', 'INVALID_ARGUMENT', 'INPUT_TOO_LARGE'].includes(error?.message) ? error.message : 'BROWSER_FAILED';
   process.stdout.write(JSON.stringify({ schema_version: 'gmaps.place.response.v1', status: 'unavailable',
-    menu_assets: [], assets: [], error_code: code, cookie_stats: error?.stats }));
+    menu_assets: [], assets: [], error_code: code }));
   process.exitCode = 2;
 } finally { if (browser) await browser.close(); }

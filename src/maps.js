@@ -3,7 +3,6 @@ import crypto from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { loadGoogleCookies, applyBrowserCookies } from './cookies.js';
 import { extractPlaceDetails, extractAboutDetails, pageStatus } from './details.js';
 import { readReviews, reviewsPageUrl } from './reviews.js';
 import { imageUrl, fullImageUrl, imageIdentity, readMenu, readMenuPhotos, readPhotos, viewerPhoto, photoMonth } from './media.js';
@@ -33,7 +32,7 @@ const GOOGLE_HOST = /^(?:www\.|maps\.)?google\.(?:com|[a-z]{2}|co\.[a-z]{2}|com\
 
 /**
  * Accepts Maps place/search links and ?cid= links on any Google country domain (google.com.tr, maps.google.de …).
- * The host is normalised to www.google.com: Google session cookies are set for .google.com only.
+ * The host is normalised to www.google.com, where Maps keeps the browser's anonymous id.
  */
 function safeMapsUrl(value) {
   try {
@@ -50,7 +49,7 @@ function safeMapsUrl(value) {
 
 /**
  * The reader matches Maps' Turkish UI texts, so every Maps URL carries hl=tr: the page language then no longer
- * depends on the server locale or the signed-in account's language.
+ * depends on the server locale or the browser's language.
  */
 export function withMapsLanguage(value) {
   try {
@@ -89,13 +88,9 @@ export async function launchBrowser(options = {}) {
   const executablePath = chromeExecutable(options);
   const userDataDir = options.userDataDir || process.env.MAPS_PROFILE_DIR;
   if (userDataDir && !path.isAbsolute(userDataDir)) throw new Error('MAPS_PROFILE_PATH_MUST_BE_ABSOLUTE');
-  const loaded = await loadGoogleCookies(options);
   const browser = await startChrome(executablePath, userDataDir, options.headless ?? true);
-  try {
-    browser.mapsExecutablePath = executablePath;
-    browser.mapsCookieStats = await applyBrowserCookies(browser, loaded);
-    return browser;
-  } catch (error) { await browser.close(); throw error; }
+  browser.mapsExecutablePath = executablePath;
+  return browser;
 }
 
 export async function newMapsPage(browser) {
@@ -245,14 +240,14 @@ async function navigatePlace(page, target) {
 /**
  * Google serves anonymous browsers the limited or the full view by the browser's anonymous id cookie: __Secure-ENID
  * in the EU consent region, NID elsewhere. Each id is issued in one class and keeps it (ENID about 13 months, NID
- * about 6), and signing in does not change it. A full-view id works in any profile and from any IP address, as long
+ * about 6); a Google account does not change it. A full-view id works in any profile and from any IP address, as long
  * as the user agent names the operating system it was issued for. A profile tends to receive new ids of its first
  * class, so it cannot fix itself by dropping the cookie; a fresh profile gets a full one about every second time.
  * Next step for a limited page: 'reload' (a just-issued id only works from the next request on), 'renew' (bring in
  * a full-view id from a fresh temporary profile) or 'stop'.
  */
-export function nextViewStep({ status, signedIn = false, reloaded = false, renewals = 0, maxRenewals = 1, sticky = false }) {
-  if (status !== 'limited_view' || signedIn || sticky) return 'stop';
+export function nextViewStep({ status, reloaded = false, renewals = 0, maxRenewals = 1, sticky = false }) {
+  if (status !== 'limited_view' || sticky) return 'stop';
   if (!reloaded) return 'reload';
   return renewals < maxRenewals ? 'renew' : 'stop';
 }
@@ -302,8 +297,7 @@ async function recoverFullView(page, target, status) {
   const state = browser.mapsView ||= { renewals: 0, sticky: false };
   let reloaded = false, renewed = 0;
   for (;;) {
-    const step = nextViewStep({ status, signedIn: await sessionState(page) === 'signed_in', reloaded,
-      renewals: state.renewals, sticky: state.sticky });
+    const step = nextViewStep({ status, reloaded, renewals: state.renewals, sticky: state.sticky });
     if (step === 'stop') break;
     if (step === 'renew') {
       state.renewals++;
@@ -346,53 +340,6 @@ export async function checkView(browser, url = VIEW_CHECK_PLACE) {
   } finally { await page.close(); }
 }
 
-/** Opens Maps once and reports whether Google treats this browser (profile) as signed in. */
-export async function checkSession(browser, options) {
-  return (await refreshSession(browser, options)).session;
-}
-
-/**
- * Opens Maps once: { session, rotated }. A signed-in Maps page asks accounts.google.com to rotate the session
- * cookies once they are due (POST /RotateCookies, observed 8 to 45 seconds after loading); staying until that
- * request completes stores the fresh cookies in the profile. An idle profile that never rotates them is signed out
- * within hours. rotated: false only means no rotation was due during the wait.
- */
-export async function refreshSession(browser, { rotationWaitMs = 60000 } = {}) {
-  const page = await newMapsPage(browser);
-  let rotated = false;
-  const onResponse = response => {
-    if (/^https:\/\/accounts\.google\.com\/RotateCookies(?:[?#]|$)/.test(response.url()) && response.ok()) rotated = true;
-  };
-  page.on('response', onResponse);
-  try {
-    await page.goto('https://www.google.com/maps?hl=tr', { waitUntil: 'domcontentloaded' });
-    await passConsent(page);
-    await page.waitForFunction(() => [...document.querySelectorAll('a, button')].some(el =>
-      /^(?:google hesabı|google account)/i.test(el.getAttribute('aria-label') || '') || /^(?:oturum açın|sign in)$/i.test((el.innerText || '').trim())),
-      { timeout: 15000 }).catch(() => {});
-    await sleep(3000);
-    const session = await sessionState(page);
-    if (session === 'signed_in') {
-      const deadline = Date.now() + Math.max(0, Number(rotationWaitMs) || 0);
-      while (!rotated && Date.now() < deadline) await sleep(500);
-    }
-    return { session, rotated };
-  } finally {
-    page.off('response', onResponse);
-    await page.close();
-  }
-}
-
-/** Whether Google shows this browser session as signed in (account button) or signed out. */
-export async function sessionState(page) {
-  return page.evaluate(() => {
-    const labels = [...document.querySelectorAll('a[aria-label], button[aria-label]')].map(el => el.getAttribute('aria-label') || '');
-    if (labels.some(label => /^(?:google hesabı|google account)/i.test(label))) return 'signed_in';
-    if ([...document.querySelectorAll('a, button')].some(el => /^(?:oturum açın|oturum aç|sign in)$/i.test((el.innerText || '').trim()))) return 'signed_out';
-    return 'unknown';
-  }).catch(() => 'unknown');
-}
-
 export async function readPlace(page, place, { maxImages = 12, maxMenuImages = 20, maxScrolls = 20,
   includeReviews = false, maxReviews = 100, maxReviewScrolls = 25, reviewSort = 'relevant', recoverView = true, onProgress } = {}) {
   const target = normalizePlaceUrl(place?.google_maps_url || place?.url);
@@ -404,11 +351,10 @@ export async function readPlace(page, place, { maxImages = 12, maxMenuImages = 2
   // Which view Google served this place in: 'full', 'limited' or 'unknown' (consent, sign-in or block pages).
   const view = { view: status === 'ok' ? 'full' : status === 'limited_view' ? 'limited' : 'unknown', view_renewed: renewed };
   const canonical = safeMapsUrl(page.url()) || target;
-  const session = await sessionState(page);
   const identity = placeIdentity(canonical) || placeIdentity(target);
-  if (!['ok', 'limited_view'].includes(status)) return { status, session, ...view, source_id: identity, google_maps_url: canonical };
+  if (!['ok', 'limited_view'].includes(status)) return { status, ...view, source_id: identity, google_maps_url: canonical };
   const details = await extractPlaceDetails(page);
-  if (details.data_status !== 'ok') return { status: 'unavailable', session, ...view, source_id: identity, google_maps_url: canonical };
+  if (details.data_status !== 'ok') return { status: 'unavailable', ...view, source_id: identity, google_maps_url: canonical };
   try {
     const about = await extractAboutDetails(page);
     details.description ||= about.description;
@@ -419,8 +365,6 @@ export async function readPlace(page, place, { maxImages = 12, maxMenuImages = 2
   if (onProgress) await onProgress({ stage:'overview', status }, page);
   const warnings = [];
   if (status !== 'ok') warnings.push(status.toUpperCase());
-  // Cookies were loaded but Google does not treat the session as signed in (expired or device-bound cookies).
-  if (session === 'signed_out' && page.browser?.()?.mapsCookieStats?.configured) warnings.push('COOKIES_NOT_SIGNED_IN');
   let menu, photos, reviews;
   try { menu = await readMenu(page, { maxImages: maxMenuImages, maxScrolls, overviewUrl: canonical, onProgress }); }
   catch { menu = { status: 'unavailable', images: [], categories: [], coverage_complete: false }; warnings.push('MENU_READ_FAILED'); }
@@ -453,7 +397,7 @@ export async function readPlace(page, place, { maxImages = 12, maxMenuImages = 2
   if (photos.truncated) warnings.push('PHOTO_IMAGE_LIMIT_OR_SCROLL_LIMIT');
   // Hitting our own image limits is not a source failure; the warnings still record it.
   const finalStatus = status !== 'ok' ? status : warnings.some(code => !code.endsWith('_LIMIT_OR_SCROLL_LIMIT')) ? 'incomplete' : 'ok';
-  return { status: finalStatus, session, ...view, source_id: identity, google_maps_url: canonical, ...details, menu, photos,
+  return { status: finalStatus, ...view, source_id: identity, google_maps_url: canonical, ...details, menu, photos,
     ...(includeReviews ? { reviews } : {}),
     warnings: [...new Set(warnings)], data_quality: { partial: finalStatus !== 'ok',
       review_count_observed: !!details.review_label, menu_coverage_complete: !!menu.coverage_complete,

@@ -181,7 +181,7 @@ const heroVisible = page => page.evaluate(() =>
 
 /**
  * Cover photo → photo gallery → its "Menü" category. The gallery lists Google's photo
- * categories (Tümü, En son, Menü, …) as tabs; limited anonymous sessions sometimes get a
+ * categories (Tümü, En son, Menü, …) as tabs; a limited view sometimes gets a
  * flat photo list without categories instead.
  */
 async function openMenuCategory(page) {
@@ -211,7 +211,7 @@ async function openMenuCategory(page) {
     return !!tab;
   });
   if (!selected) return 'NO_MENU_CATEGORY';
-  // The viewer then switches to the category's first photo (signed in: after ~2 s). The URL can change before the
+  // The viewer then switches to the category's first photo (after up to ~2 s). The URL can change before the
   // photo does, so wait for a different photo id; otherwise the cover photo would be read as the first menu page.
   await page.waitForFunction(previous => {
     const id = location.href.match(/!1s([\w-]{6,})!2e10(?:!|$)/)?.[1] || '';
@@ -321,13 +321,13 @@ export async function readMenuPhotos(page, { overviewUrl = '', maxImages = 20, w
     }
     if (opened === 'NO_MENU_CATEGORY') return { status: 'empty', reason: opened, images: [], truncated: false };
     reason = opened;
-    // Limited anonymous sessions often get the categorized gallery on a later load.
+    // A limited view often gets the categorized gallery on a later load.
     if (!overviewUrl) break;
   }
   return { status: 'unavailable', reason, images: [], truncated: false };
 }
 
-/** Structured menu (signed-in Maps only): Menu tab text categories, prices and item photos. */
+/** Structured menu (full view only): Menu tab text categories, prices and item photos. */
 async function readMenuTab(page, { maxCategories, maxImages, maxScrolls, waitMs, onProgress }) {
   const result = { opened: false, categories: [], images: [], items: [], expected_images: 0, exhausted: true, truncated: false };
   if (!await clickControl(page, 'mainMenu')) return result;
