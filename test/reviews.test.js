@@ -5,7 +5,10 @@ import { readReviews, reviewsPageUrl, parseRelativeAge, estimateReviewDate, exac
 
 test('review route matches the Reviews deep link used by Google Maps', () => {
   const url = 'https://www.google.com/maps/place/Cafe/data=!4m7!3m6!1s0xabc:0xdef!8m2!3d36.8!4d30.7!10e9!16s%2Fg%2F1abc?hl=tr';
-  assert.equal(reviewsPageUrl(url), 'https://www.google.com/maps/place/Cafe/data=!4m7!3m6!1s0xabc:0xdef!8m2!3d36.8!4d30.7!10e9!9m1!1b1!16s%2Fg%2F1abc?hl=tr');
+  // Same shape Google uses when the Reviews tab is opened: the enclosing counts grow with the inserted tokens.
+  assert.equal(reviewsPageUrl(url), 'https://www.google.com/maps/place/Cafe/data=!4m8!3m7!1s0xabc:0xdef!8m2!3d36.8!4d30.7!9m1!1b1!16s%2Fg%2F1abc?hl=tr');
+  assert.equal(reviewsPageUrl('https://www.google.com/maps/place/Cafe/data=!4m6!3m5!1s0xabc:0xdef!8m2!3d36.8!4d30.7!16s%2Fg%2F1abc'),
+    'https://www.google.com/maps/place/Cafe/data=!4m8!3m7!1s0xabc:0xdef!8m2!3d36.8!4d30.7!9m1!1b1!16s%2Fg%2F1abc');
   assert.equal(reviewsPageUrl('https://evil.test/maps/place/Cafe/data=!16s%2Fg%2F1abc'), '');
 });
 

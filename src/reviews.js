@@ -10,6 +10,32 @@ const SORT_LABELS = {
   lowest: /^(?:en düşük|lowest)/i,
 };
 
+/**
+ * Maps' data= path is a flat list of !<field><type><value> tokens; an "m" token's value counts the tokens nested
+ * in it. Adding or removing a token must update every enclosing count, otherwise Google drops the place and
+ * shows an empty panel. Removes leaf tokens matching `remove`, then inserts `insert` before the first token
+ * matching `insertBefore`; '' when there is no such token.
+ */
+export function editMapsData(data, { remove = () => false, insertBefore, insert = [] } = {}) {
+  const tokens = String(data).split('!').filter(Boolean).map(text => {
+    const match = text.match(/^\d+([a-zA-Z])(\d*)/);
+    return { text, nested: match?.[1] === 'm' ? Number(match[2]) || 0 : 0, container: match?.[1] === 'm' };
+  });
+  const containers = at => tokens.filter((token, index) => token.container && index < at && index + token.nested >= at);
+  for (let index = tokens.length - 1; index >= 0; index--) {
+    if (tokens[index].container || !remove(tokens[index].text)) continue;
+    for (const token of containers(index)) token.nested--;
+    tokens.splice(index, 1);
+  }
+  if (insert.length) {
+    const at = tokens.findIndex(token => insertBefore(token.text));
+    if (at < 0) return '';
+    for (const token of containers(at)) token.nested += insert.length;
+    tokens.splice(at, 0, ...insert.map(text => ({ text, nested: 0, container: false })));
+  }
+  return tokens.map(token => `!${token.container ? token.text.replace(/^(\d+m)\d*/, `$1${token.nested}`) : token.text}`).join('');
+}
+
 /** Build the same Reviews deep link Google creates when a user opens the tab. */
 export function reviewsPageUrl(value) {
   try {
@@ -19,9 +45,11 @@ export function reviewsPageUrl(value) {
     const marker = url.pathname.indexOf('/data=');
     if (marker < 0) return '';
     const before = url.pathname.slice(0, marker + 6), data = url.pathname.slice(marker + 6);
-    const id = data.indexOf('!16s') >= 0 ? '!16s' : data.indexOf('!19s') >= 0 ? '!19s' : '';
-    if (!id) return '';
-    url.pathname = `${before}${data.replace(id, `!9m1!1b1${id}`)}`;
+    // A link copied on another tab (!10e…) opens that tab; the Reviews tab is !9m1!1b1 in the same place group.
+    const edited = editMapsData(data, { remove: token => /^10e\d+$/.test(token),
+      insertBefore: token => /^(?:16|19)s/.test(token), insert: ['9m1', '1b1'] });
+    if (!edited) return '';
+    url.pathname = `${before}${edited}`;
     return url.toString();
   } catch { return ''; }
 }
