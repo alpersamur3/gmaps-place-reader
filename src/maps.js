@@ -243,13 +243,13 @@ async function navigatePlace(page, target) {
 }
 
 /**
- * Google serves the limited or the full anonymous view by the browser's __Secure-ENID cookie. Each ENID is issued
- * in one class and keeps it (about 13 months), and a profile receives new ENIDs of the same class, so a limited
- * profile cannot fix itself by dropping the cookie. A full-view ENID works in any profile on the same platform
- * (it is tied to the user agent's operating system, not to the IP address). In the EU consent region Google issues
- * an ENID with the first Maps response; elsewhere usually none, and only a session gives the full view.
- * Next step for a limited page: 'reload' (a just-issued ENID only works from the next request on), 'renew' (bring
- * in a full-view ENID from a fresh temporary profile) or 'stop'.
+ * Google serves anonymous browsers the limited or the full view by the browser's anonymous id cookie: __Secure-ENID
+ * in the EU consent region, NID elsewhere. Each id is issued in one class and keeps it (ENID about 13 months, NID
+ * about 6), and signing in does not change it. A full-view id works in any profile and from any IP address, as long
+ * as the user agent names the operating system it was issued for. A profile tends to receive new ids of its first
+ * class, so it cannot fix itself by dropping the cookie; a fresh profile gets a full one about every second time.
+ * Next step for a limited page: 'reload' (a just-issued id only works from the next request on), 'renew' (bring in
+ * a full-view id from a fresh temporary profile) or 'stop'.
  */
 export function nextViewStep({ status, signedIn = false, reloaded = false, renewals = 0, maxRenewals = 1, sticky = false }) {
   if (status !== 'limited_view' || signedIn || sticky) return 'stop';
@@ -257,19 +257,22 @@ export function nextViewStep({ status, signedIn = false, reloaded = false, renew
   return renewals < maxRenewals ? 'renew' : 'stop';
 }
 
-async function googleCookie(page, name) {
+const ANONYMOUS_IDS = ['__Secure-ENID', 'NID'];
+
+async function anonymousIdCookies(page) {
   const client = await page.createCDPSession();
   try {
     const { cookies } = await client.send('Network.getCookies', { urls: ['https://www.google.com/maps'] });
-    return cookies.find(cookie => cookie.name === name) || null;
+    return cookies.filter(cookie => ANONYMOUS_IDS.includes(cookie.name)).map(({ name, value, domain, path: cookiePath, expires, httpOnly, secure, sameSite }) =>
+      ({ name, value, domain, path: cookiePath, httpOnly, secure, ...(expires > 0 ? { expires } : {}), ...(sameSite ? { sameSite } : {}) }));
   } finally { await client.detach().catch(() => {}); }
 }
 
 /**
- * A full-view __Secure-ENID from a fresh temporary profile: each new profile gets its class by chance (about two in
- * three were full in tests), so up to `attempts` profiles are tried. null when Google issues no ENID at all here.
+ * Full-view anonymous id cookies (__Secure-ENID / NID) from fresh temporary profiles: each new profile gets its
+ * class by chance, so up to `attempts` profiles are tried. null when none is found or Google issues no id here.
  */
-export async function mintFullViewCookie(executablePath, { attempts = 4, place = VIEW_CHECK_PLACE } = {}) {
+export async function mintFullViewCookies(executablePath, { attempts = 6, place = VIEW_CHECK_PLACE } = {}) {
   const target = normalizePlaceUrl(place);
   for (let attempt = 0; attempt < attempts; attempt++) {
     const dir = await mkdtemp(path.join(os.tmpdir(), 'gmaps-view-'));
@@ -278,13 +281,9 @@ export async function mintFullViewCookie(executablePath, { attempts = 4, place =
       browser = await startChrome(executablePath, dir);
       const page = await newMapsPage(browser);
       await navigatePlace(page, target);
-      const enid = await googleCookie(page, '__Secure-ENID');
-      if (!enid) return null;
+      if (!(await anonymousIdCookies(page)).length) return null;
       if (await pageStatus(page) !== 'ok') await navigatePlace(page, target);
-      if (await pageStatus(page) === 'ok') {
-        const { name, value, domain, path: cookiePath, expires, httpOnly, secure, sameSite } = await googleCookie(page, '__Secure-ENID') || enid;
-        return { name, value, domain, path: cookiePath, httpOnly, secure, ...(expires > 0 ? { expires } : {}), ...(sameSite ? { sameSite } : {}) };
-      }
+      if (await pageStatus(page) === 'ok') return await anonymousIdCookies(page);
     } catch { /* try another profile */ } finally {
       await browser?.close().catch(() => {});
       await rm(dir, { recursive: true, force: true }).catch(() => {});
@@ -308,10 +307,16 @@ async function recoverFullView(page, target, status) {
     if (step === 'stop') break;
     if (step === 'renew') {
       state.renewals++;
-      let cookie = null;
-      try { cookie = await mintFullViewCookie(browser.mapsExecutablePath || chromeExecutable()); } catch { cookie = null; }
-      if (!cookie) break;
-      await browser.defaultBrowserContext().setCookie(cookie);
+      let cookies = null;
+      try { cookies = await mintFullViewCookies(browser.mapsExecutablePath || chromeExecutable()); } catch { cookies = null; }
+      if (!cookies?.length) break;
+      // Drop the profile's own (limited) ids first, then bring in the full-view ones.
+      for (const old of await anonymousIdCookies(page)) {
+        const client = await page.createCDPSession();
+        await client.send('Network.deleteCookies', { name: old.name, domain: old.domain, path: old.path || '/' }).catch(() => {});
+        await client.detach().catch(() => {});
+      }
+      for (const cookie of cookies) await browser.defaultBrowserContext().setCookie(cookie);
       renewed++;
     }
     reloaded = true;
