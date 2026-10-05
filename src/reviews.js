@@ -158,6 +158,19 @@ function readReviewCardsDom() {
     // Photos attached to the review (background images on photo buttons).
     const photos = [...card.querySelectorAll('button[style*="background-image"], [data-photo-index][style*="background-image"]')]
       .map(node => (getComputedStyle(node).backgroundImage.match(/url\("?(https:[^")]+)"?\)/) || [])[1]).filter(Boolean);
+    // Structured parts under the text: sub-ratings ("Yiyecek: 5") and name/value rows ("Kişi başı fiyat" · "₺400–600").
+    const details = [];
+    for (const block of card.querySelectorAll('.PBK6be')) {
+      const bold = block.querySelector('b');
+      if (bold) {
+        const name = clean(bold.innerText || bold.textContent).replace(/[:：]$/, '');
+        const value = clean((block.innerText || block.textContent).replace(bold.innerText || bold.textContent, ''));
+        if (name && value) details.push({ name, value });
+        continue;
+      }
+      const parts = [...block.children].map(part => clean(part.innerText || part.textContent)).filter(Boolean);
+      if (parts.length >= 2) details.push({ name: parts[0].replace(/[:：]$/, ''), value: parts.slice(1).join(' · ') });
+    }
     const translated = [...card.querySelectorAll('button, span')].some(node =>
       /^(?:orijinali göster|show original|google tarafından çevrildi|translated by google)/i.test(clean(node.innerText)));
     return {
@@ -171,6 +184,7 @@ function readReviewCardsDom() {
       date_precision: explicitDate ? 'day' : (dateLabel ? 'relative' : 'unknown'),
       edited: /düzenlendi|edited/i.test(dateLabel),
       text: body,
+      details,
       translated,
       photos: [...new Set(photos)].slice(0, 20),
       owner_response: clean(replyNode?.innerText || ''),
@@ -417,6 +431,8 @@ export async function readReviews(page, options = {}) {
         const estimate = estimateReviewDate(row.date_label, observedAt);
         row.date_estimate = row.date_iso ? row.date_iso.slice(0, 10) : estimate?.date || '';
         if (!row.date_iso && estimate) row.date_precision = estimate.precision;
+        // An edited review's label dates the edit; date_iso stays the original posting time.
+        if (row.edited) row.edited_estimate = estimate?.date || '';
       }
       result.exact_dates = result.reviews.filter(row => row.date_precision === 'exact').length;
     }

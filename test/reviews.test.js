@@ -23,7 +23,10 @@ test('review reader opens the tab, expands full text, and preserves the displaye
         <div class="jftiEf" data-review-id="review-1" aria-label="Ada Yılmaz">
           <button aria-label="Ada Yılmaz 12 yorum · 3 fotoğraf"><span class="d4r55">Ada Yılmaz</span></button>
           <div class="DU9Pgb"><span role="img" aria-label="5 yıldız"></span><span class="rsqaWe" datetime="2026-08-01T00:00:00Z">2 ay önce düzenlendi</span></div>
-          <div><span class="wiI7pd" lang="tr">Kısa metin…</span><button aria-label="Daha fazla göster" aria-expanded="false">Daha fazla</button></div>
+          <div><span class="wiI7pd" lang="tr">Kısa metin…</span><button aria-label="Daha fazla göster" aria-expanded="false">Daha fazla</button>
+            <div><div class="PBK6be"><div><span class="RfDO5c"><span>Kişi başı fiyat</span></span></div>
+              <div><span class="RfDO5c"><span aria-label="₺400-₺600">₺400–600</span></span></div></div>
+            <div class="PBK6be"><div><span class="RfDO5c"><span><b>Yiyecek:</b> 5</span></span></div></div></div></div>
           <div class="CDe7pd">Yanıtınız için teşekkür ederiz</div>
           <button aria-label="3 beğenme">Beğen</button>
         </div>
@@ -54,6 +57,9 @@ test('review reader opens the tab, expands full text, and preserves the displaye
     assert.equal(result.reviews[0].edited, true);
     assert.equal(result.reviews[0].owner_response, 'Yanıtınız için teşekkür ederiz');
     assert.equal(result.reviews[0].likes, 3);
+    assert.deepEqual(result.reviews[0].details, [{ name: 'Kişi başı fiyat', value: '₺400–600' }, { name: 'Yiyecek', value: '5' }]);
+    assert.match(result.reviews[0].edited_estimate, /^\d{4}-\d{2}-\d{2}$/);
+    assert.deepEqual(result.reviews[1].details, []);
     assert.equal(result.reviews[1].date_label, '1 week ago');
     assert.equal(result.reviews[1].date_iso, '');
     assert.equal(result.reviews[1].date_precision, 'week');
