@@ -270,21 +270,65 @@ async function loadMoreReviews(page, waitMs) {
   return { scroller: true, grew };
 }
 
+/**
+ * Review pages arrive as streamed batchexecute responses that Maps cancels once it has parsed them, so their
+ * bodies are often gone from the network log. Pausing them at the response stage copies each body before the
+ * page reads it; the request then continues unchanged. Returns a function that stops the capture.
+ */
+async function captureDataResponses(page, keep) {
+  let client;
+  try {
+    client = await page.createCDPSession();
+    await client.send('Fetch.enable', { patterns: [{ urlPattern: '*://www.google.com/maps/*batchexecute*', requestStage: 'Response' }] });
+  } catch {
+    await client?.detach().catch(() => {});
+    return async () => {};
+  }
+  const pending = new Set();
+  const onPaused = event => {
+    const job = (async () => {
+      try {
+        if (event.responseStatusCode >= 200 && event.responseStatusCode < 300) {
+          const body = await client.send('Fetch.getResponseBody', { requestId: event.requestId });
+          keep(body.base64Encoded ? Buffer.from(body.body, 'base64').toString('utf8') : body.body);
+        }
+      } catch { /* a request the page cancelled meanwhile has no body */ }
+      await client.send('Fetch.continueRequest', { requestId: event.requestId }).catch(() => {});
+    })();
+    pending.add(job);
+    job.finally(() => pending.delete(job));
+  };
+  client.on('Fetch.requestPaused', onPaused);
+  let stopped = false;
+  return async () => {
+    if (stopped) return;
+    stopped = true;
+    await Promise.allSettled([...pending]);
+    await client.send('Fetch.disable').catch(() => {});
+    client.off('Fetch.requestPaused', onPaused);
+    await client.detach().catch(() => {});
+  };
+}
+
 /** Read Google Maps reviews: full text, rating, author, exact date when Google sends it, owner reply. */
 export async function readReviews(page, options = {}) {
   const bodies = []; let stored = 0;
+  const keep = text => {
+    if (stored > 80 * 1024 * 1024 || text.length > 8 * 1024 * 1024 || !/data-review-id|Ch[A-Za-z0-9_-]{20}|\d{13}/.test(text)) return;
+    bodies.push(text); stored += text.length;
+  };
   const onResponse = async response => {
     try {
       const type = response.request().resourceType();
-      if (!['xhr', 'fetch', 'document'].includes(type) || stored > 80 * 1024 * 1024) return;
-      const text = await response.text();
-      if (text.length > 8 * 1024 * 1024 || !/data-review-id|Ch[A-Za-z0-9_-]{20}|\d{13}/.test(text)) return;
-      bodies.push(text); stored += text.length;
+      if (!['xhr', 'fetch', 'document'].includes(type) || /batchexecute/.test(response.url())) return;
+      keep(await response.text());
     } catch { /* bodies of redirects or aborted requests are unavailable */ }
   };
   page.on('response', onResponse);
+  const stopCapture = await captureDataResponses(page, keep);
   try {
     const result = await collectReviews(page, options);
+    await stopCapture();
     if (result.reviews.length) {
       const observedAt = Date.now();
       const stamps = reviewTimestampsFromText(bodies.join('\n'), result.reviews.map(row => row.review_id), observedAt);
@@ -301,7 +345,10 @@ export async function readReviews(page, options = {}) {
       result.exact_dates = result.reviews.filter(row => row.date_precision === 'exact').length;
     }
     return result;
-  } finally { page.off('response', onResponse); }
+  } finally {
+    await stopCapture();
+    page.off('response', onResponse);
+  }
 }
 
 async function collectReviews(page, { overviewUrl = '', reviewCount = 0, maxReviews = 100, maxScrolls = 25, waitMs = 650,
