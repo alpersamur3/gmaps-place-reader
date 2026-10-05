@@ -288,6 +288,8 @@ export async function readPlace(page, place, { maxImages = 12, maxMenuImages = 2
   let menu, photos, reviews;
   try { menu = await readMenu(page, { maxImages: maxMenuImages, maxScrolls, overviewUrl: canonical, onProgress }); }
   catch { menu = { status: 'unavailable', images: [], categories: [], coverage_complete: false }; warnings.push('MENU_READ_FAILED'); }
+  // A limited view shows only part of the menu album (often a single photo), so it is never complete.
+  if (status !== 'ok') menu.coverage_complete = false;
   try { photos = await readPhotos(page, { maxImages, maxScrolls, overviewUrl: canonical, exclude: (menu.images || []).map(row => row.url) }); }
   catch { photos = { status: 'unavailable', images: [], coverage_complete: false }; warnings.push('PHOTOS_READ_FAILED'); }
   if (includeReviews) {
@@ -299,7 +301,10 @@ export async function readPlace(page, place, { maxImages = 12, maxMenuImages = 2
   const menuUrls = new Set(menu.images.map(row => imageIdentity(row.url)));
   photos.images = photos.images.filter(row => !menuUrls.has(imageIdentity(row.url)));
   if (menu.status === 'unavailable') warnings.push(menu.reason || 'MENU_UNAVAILABLE');
-  if (menu.status === 'empty') warnings.push('MENU_IMAGES_NOT_LOADED');
+  // A gallery with categories but no Menu category means the place has no menu photos, not a read failure.
+  if (menu.status === 'empty' && menu.reason !== 'NO_MENU_CATEGORY') warnings.push('MENU_IMAGES_NOT_LOADED');
+  // Menu items were read but the menu photo album could not be opened.
+  if (menu.status === 'found' && !menu.images?.length && menu.reason && menu.reason !== 'NO_MENU_CATEGORY') warnings.push('MENU_PHOTOS_UNAVAILABLE');
   if (photos.status === 'unavailable') warnings.push('PHOTOS_UNAVAILABLE');
   // A rating means the place has reviews even when a limited view hides their count.
   if (includeReviews && (reviews.status === 'unavailable' || (reviews.status === 'empty' && (details.review_count > 0 || details.rating > 0)))) warnings.push('REVIEWS_UNAVAILABLE');
@@ -358,7 +363,7 @@ export function toObservation(place, detail, { keyword = '', location = '' } = {
     photo_coverage_complete: false, photo_usability_verified: false, contact_coverage_complete: false,
     menu_status: 'unknown', maps_menu_status: detail.menu?.status === 'found' ?
       (detail.menu?.coverage_complete === false || ['limited_view', 'auth_required', 'blocked'].includes(detail.status) ? 'menu_partial' : 'menu_found') :
-      detail.menu?.status === 'not_found' ? 'menu_not_found' : 'unavailable',
+      detail.menu?.status === 'empty' && detail.menu?.reason === 'NO_MENU_CATEGORY' ? 'menu_not_found' : 'unavailable',
     has_opening_hours: !!detail.opening_hours, google_maps_url: detail.google_maps_url || place.google_maps_url,
     source_error: ok ? '' : `MAPS_BROWSER_${String(detail.status || 'unavailable').toUpperCase()}`,
     assets: assets(images, 'general'), menu_assets: assets(menus, 'menu_candidate'),

@@ -201,7 +201,8 @@ async function openMenuCategory(page) {
     .some(list => [...list.querySelectorAll('[role="tab"]')].some(tab => /^(tümü|all)$/i.test(tab.textContent.trim()))),
   { timeout: 2000, polling: 250 }).then(() => 'tabs', () => 'flat');
   if (gallery !== 'tabs') return gallery === 'flat' ? 'MENU_CATEGORY_NOT_EXPOSED' : 'PHOTO_GALLERY_NOT_EXPOSED';
-  const before = await page.evaluate(() => location.href);
+  // The viewer opened on the cover photo; its id tells when the Menu category's first photo is really shown.
+  const cover = await page.evaluate(() => location.href.match(/!1s([\w-]{6,})!2e10(?:!|$)/)?.[1] || '');
   const selected = await page.evaluate(() => {
     const list = [...document.querySelectorAll('[role="tablist"]')]
       .find(list => [...list.querySelectorAll('[role="tab"]')].some(tab => /^(tümü|all)$/i.test(tab.textContent.trim())));
@@ -210,14 +211,30 @@ async function openMenuCategory(page) {
     return !!tab;
   });
   if (!selected) return 'NO_MENU_CATEGORY';
-  // The viewer then switches to the category's first photo (signed in: after ~2 s).
-  await page.waitForFunction(previous => location.href !== previous && /!2e10/.test(location.href), { timeout: 8000 }, before).catch(() => {});
+  // The viewer then switches to the category's first photo (signed in: after ~2 s). The URL can change before the
+  // photo does, so wait for a different photo id; otherwise the cover photo would be read as the first menu page.
+  await page.waitForFunction(previous => {
+    const id = location.href.match(/!1s([\w-]{6,})!2e10(?:!|$)/)?.[1] || '';
+    return !!id && id !== previous;
+  }, { timeout: 10000 }, cover).catch(() => {});
   return 'ok';
 }
 
 /** Prefer the 1/N album exposed directly on the business Menu tab. */
 async function openMenuTabAlbum(page) {
   if (!await clickControl(page, 'mainMenu')) return { opened: false, expected_images: 0 };
+  // readMenuTab leaves the Menu tab on its last category; the album strip is on the Menu tab's own Overview.
+  await page.evaluate(() => {
+    const norm = value => String(value || '').trim().toLocaleLowerCase('tr').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ı/g, 'i');
+    const list = [...document.querySelectorAll('[role="tablist"]')].filter(item => item.getClientRects().length).find(item => {
+      const names = [...item.querySelectorAll('[role="tab"]')].map(tab => norm(tab.textContent));
+      return names.some(name => /^(?:genel bakis|overview)$/.test(name)) && !names.some(name => /^(?:hakkinda|about)$/.test(name));
+    });
+    const tab = [...(list?.querySelectorAll('[role="tab"]') || [])].find(item => /^(?:genel bakis|overview)$/.test(norm(item.textContent)));
+    if (tab && tab.getAttribute('aria-selected') !== 'true') tab.click();
+  });
+  await page.waitForFunction(() => [...document.querySelectorAll('[role="region"] button[aria-label]')].some(button =>
+    button.getClientRects().length && /^(?:fotoğraf|photo)\s+1\/\d+$/i.test(button.getAttribute('aria-label'))), { timeout: 5000 }).catch(() => {});
   const handle = await page.evaluateHandle(() => {
     const region = [...document.querySelectorAll('[role="region"]')].find(item => /^(?:menü|menu)$/i.test(item.getAttribute('aria-label') || ''));
     if (!region) return null;

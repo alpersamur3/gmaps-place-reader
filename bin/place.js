@@ -55,7 +55,7 @@ try {
   const partial = detail.menu?.coverage_complete === false ||
     ['limited_view', 'auth_required', 'blocked'].includes(detail.status) || detail.menu?.status !== 'found';
   const status = hasMenu ? (partial ? 'menu_partial' : 'menu_found') :
-    detail.status === 'ok' && detail.menu?.status === 'not_found' ? 'menu_not_found' : 'unavailable';
+    detail.status === 'ok' && detail.menu?.status === 'empty' && detail.menu?.reason === 'NO_MENU_CATEGORY' ? 'menu_not_found' : 'unavailable';
   process.stdout.write(JSON.stringify({ schema_version: 'gmaps.place.response.v1', status,
     place, reviews: detail.reviews?.reviews || [],
     menu_assets: larger(detail.menu?.images), assets: larger(detail.photos?.images),

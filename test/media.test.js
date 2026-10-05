@@ -33,7 +33,7 @@ async function mapsFixture(html, run) {
 }
 
 // Cover photo → gallery categories → Menü → viewer with a "next" control, like Maps.
-function galleryHtml({ categories = ['Tümü', 'Menü', 'Yeme-içme'], photos = [], wraps = false, flat = false } = {}) {
+function galleryHtml({ categories = ['Tümü', 'Menü', 'Yeme-içme'], photos = [], wraps = false, flat = false, cover = '' } = {}) {
   const tabs = categories.map(name => `<div role="tab" aria-selected="false">${name}</div>`).join('');
   return `<main role="main"><h1>Test Cafe</h1>
     <button jsaction="pane.x.heroHeaderImage" style="display:block;width:80px;height:40px">cover</button>
@@ -55,10 +55,18 @@ function galleryHtml({ categories = ['Tümü', 'Menü', 'Yeme-içme'], photos = 
         document.querySelector('#captured').textContent = photos[i][4] || '';
         document.querySelector('#next').disabled = !${wraps} && i === photos.length - 1;
       };
-      document.querySelector('[jsaction*=heroHeaderImage]').onclick = () => { document.querySelector('#gallery').hidden = false; };
+      // Real Maps opens the viewer on the cover photo; selecting a category changes the URL before the photo.
+      const coverUrl = extra => '/maps/place/Test/@1,2,3a,75y,90t/data=!3m8!1e2!3m6!1s${cover}!2e10!3e12!6s' +
+        encodeURIComponent('https://lh3.googleusercontent.com/gps-cs-s/${cover}=w203-h152-k-no') + '!7i800!8i600' + extra;
+      document.querySelector('[jsaction*=heroHeaderImage]').onclick = () => {
+        document.querySelector('#gallery').hidden = false;
+        if (${JSON.stringify(cover)}) history.pushState(null, '', coverUrl(''));
+      };
       for (const tab of document.querySelectorAll('#gallery [role=tab]')) tab.onclick = () => {
         tab.setAttribute('aria-selected', 'true');
-        if (tab.textContent === 'Menü') setTimeout(() => show(0), 150);
+        if (tab.textContent !== 'Menü') return;
+        if (${JSON.stringify(cover)}) history.pushState(null, '', coverUrl('!4m2!3m1!1s0x1:0x2'));
+        setTimeout(() => show(0), ${JSON.stringify(cover)} ? 600 : 150);
       };
       document.querySelector('#next').onclick = () => show((index + 1) % photos.length);
       document.querySelector('#popular').onclick = () => { document.body.dataset.popular = 'clicked'; };
@@ -236,5 +244,15 @@ test('gallery without a menu category is empty rather than unavailable', async (
     const result = await readMenuPhotos(page, { waitMs: 20 });
     assert.equal(result.status, 'empty');
     assert.equal(result.reason, 'NO_MENU_CATEGORY');
+  });
+});
+
+test('the cover photo the viewer opens on is never read as the first menu page', async () => {
+  const photos = [['menuPageOne', 'Fotoğraf - Oca 2026', 1200, 1600], ['menuPageTwo', 'Fotoğraf - Şub 2026', 1200, 1600]];
+  await mapsFixture(galleryHtml({ photos, cover: 'coverPhoto' }), async page => {
+    const result = await readMenuPhotos(page, { waitMs: 20 });
+    assert.equal(result.status, 'found', JSON.stringify(result));
+    assert.deepEqual(result.images.map(row => row.taken_at), ['2026-01', '2026-02']);
+    assert.ok(result.images.every(row => !row.url.includes('coverPhoto')));
   });
 });
