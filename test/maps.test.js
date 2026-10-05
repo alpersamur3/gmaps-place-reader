@@ -114,3 +114,15 @@ test('place links: country domains, ?cid= and short links are accepted; other ho
   assert.equal(normalizePlaceUrl('https://google.evil.com/maps/place/x'), '');
   assert.equal(normalizePlaceUrl('http://www.google.com/maps/place/x'), '');
 });
+
+test('limited view: reload once, then bring in a full-view ENID once per browser, never when signed in', async () => {
+  const { nextViewStep } = await import('../src/maps.js');
+  assert.equal(nextViewStep({ status: 'ok' }), 'stop');
+  // A just-issued ENID only works from the next request on.
+  assert.equal(nextViewStep({ status: 'limited_view' }), 'reload');
+  assert.equal(nextViewStep({ status: 'limited_view', reloaded: true }), 'renew');
+  assert.equal(nextViewStep({ status: 'limited_view', reloaded: true, renewals: 1 }), 'stop');
+  assert.equal(nextViewStep({ status: 'limited_view', signedIn: true }), 'stop');
+  // A browser that could not leave the limited view does not retry on every place.
+  assert.equal(nextViewStep({ status: 'limited_view', sticky: true }), 'stop');
+});

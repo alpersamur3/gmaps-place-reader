@@ -1,5 +1,7 @@
 import puppeteer from 'puppeteer-core';
 import crypto from 'node:crypto';
+import { mkdtemp, rm } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { loadGoogleCookies, applyBrowserCookies } from './cookies.js';
 import { extractPlaceDetails, extractAboutDetails, pageStatus } from './details.js';
@@ -79,16 +81,18 @@ export function chromeExecutable(options = {}) {
   return executablePath;
 }
 
+const startChrome = (executablePath, userDataDir, headless = true) => puppeteer.launch({ executablePath, headless,
+  args: ['--lang=tr-TR', '--no-first-run', '--disable-extensions'],
+  defaultViewport: { width: 1365, height: 900 }, userDataDir, timeout: 20000 });
+
 export async function launchBrowser(options = {}) {
   const executablePath = chromeExecutable(options);
   const userDataDir = options.userDataDir || process.env.MAPS_PROFILE_DIR;
   if (userDataDir && !path.isAbsolute(userDataDir)) throw new Error('MAPS_PROFILE_PATH_MUST_BE_ABSOLUTE');
   const loaded = await loadGoogleCookies(options);
-  const browser = await puppeteer.launch({ executablePath, headless: options.headless ?? true,
-    args: ['--lang=tr-TR', '--no-first-run', '--disable-extensions'],
-    defaultViewport: { width: 1365, height: 900 },
-    userDataDir, timeout: 20000 });
+  const browser = await startChrome(executablePath, userDataDir, options.headless ?? true);
   try {
+    browser.mapsExecutablePath = executablePath;
     browser.mapsCookieStats = await applyBrowserCookies(browser, loaded);
     return browser;
   } catch (error) { await browser.close(); throw error; }
@@ -236,6 +240,105 @@ async function navigatePlace(page, target) {
   await sleep(500);
 }
 
+/**
+ * Google serves the limited or the full anonymous view by the browser's __Secure-ENID cookie. Each ENID is issued
+ * in one class and keeps it (about 13 months), and a profile receives new ENIDs of the same class, so a limited
+ * profile cannot fix itself by dropping the cookie. A full-view ENID works in any profile on the same platform
+ * (it is tied to the user agent's operating system, not to the IP address). In the EU consent region Google issues
+ * an ENID with the first Maps response; elsewhere usually none, and only a session gives the full view.
+ * Next step for a limited page: 'reload' (a just-issued ENID only works from the next request on), 'renew' (bring
+ * in a full-view ENID from a fresh temporary profile) or 'stop'.
+ */
+export function nextViewStep({ status, signedIn = false, reloaded = false, renewals = 0, maxRenewals = 1, sticky = false }) {
+  if (status !== 'limited_view' || signedIn || sticky) return 'stop';
+  if (!reloaded) return 'reload';
+  return renewals < maxRenewals ? 'renew' : 'stop';
+}
+
+async function googleCookie(page, name) {
+  const client = await page.createCDPSession();
+  try {
+    const { cookies } = await client.send('Network.getCookies', { urls: ['https://www.google.com/maps'] });
+    return cookies.find(cookie => cookie.name === name) || null;
+  } finally { await client.detach().catch(() => {}); }
+}
+
+/**
+ * A full-view __Secure-ENID from a fresh temporary profile: each new profile gets its class by chance (about two in
+ * three were full in tests), so up to `attempts` profiles are tried. null when Google issues no ENID at all here.
+ */
+export async function mintFullViewCookie(executablePath, { attempts = 4, place = VIEW_CHECK_PLACE } = {}) {
+  const target = normalizePlaceUrl(place);
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'gmaps-view-'));
+    let browser;
+    try {
+      browser = await startChrome(executablePath, dir);
+      const page = await newMapsPage(browser);
+      await navigatePlace(page, target);
+      const enid = await googleCookie(page, '__Secure-ENID');
+      if (!enid) return null;
+      if (await pageStatus(page) !== 'ok') await navigatePlace(page, target);
+      if (await pageStatus(page) === 'ok') {
+        const { name, value, domain, path: cookiePath, expires, httpOnly, secure, sameSite } = await googleCookie(page, '__Secure-ENID') || enid;
+        return { name, value, domain, path: cookiePath, httpOnly, secure, ...(expires > 0 ? { expires } : {}), ...(sameSite ? { sameSite } : {}) };
+      }
+    } catch { /* try another profile */ } finally {
+      await browser?.close().catch(() => {});
+      await rm(dir, { recursive: true, force: true }).catch(() => {});
+    }
+  }
+  return null;
+}
+
+/**
+ * Turns a limited anonymous view into the full one (see nextViewStep). Renewals are counted per browser, and a
+ * browser that cannot leave the limited view stops trying, so later places do not pay for extra loads.
+ * Returns { status, renewed }.
+ */
+async function recoverFullView(page, target, status) {
+  const browser = page.browser();
+  const state = browser.mapsView ||= { renewals: 0, sticky: false };
+  let reloaded = false, renewed = 0;
+  for (;;) {
+    const step = nextViewStep({ status, signedIn: await sessionState(page) === 'signed_in', reloaded,
+      renewals: state.renewals, sticky: state.sticky });
+    if (step === 'stop') break;
+    if (step === 'renew') {
+      state.renewals++;
+      let cookie = null;
+      try { cookie = await mintFullViewCookie(browser.mapsExecutablePath || chromeExecutable()); } catch { cookie = null; }
+      if (!cookie) break;
+      await browser.defaultBrowserContext().setCookie(cookie);
+      renewed++;
+    }
+    reloaded = true;
+    await navigatePlace(page, target);
+    status = await pageStatus(page);
+  }
+  if (status === 'limited_view') state.sticky = true;
+  return { status, renewed };
+}
+
+/** A well-known place whose page shows Google's limited-view notice when the browser only gets that view. */
+export const VIEW_CHECK_PLACE = 'https://www.google.com/maps?cid=10222232094831998944';
+
+/**
+ * Opens one place and reports whether this browser gets the full view: { view: 'full' | 'limited' | <status>,
+ * renewed }. A limited ENID is renewed on the way (see recoverFullView), so a periodic check also repairs it.
+ */
+export async function checkView(browser, url = VIEW_CHECK_PLACE) {
+  const target = normalizePlaceUrl(url);
+  if (!target) throw new Error('INVALID_MAPS_URL');
+  const page = await newMapsPage(browser);
+  try {
+    await navigatePlace(page, target);
+    let status = await pageStatus(page), renewed = 0;
+    if (status === 'limited_view') ({ status, renewed } = await recoverFullView(page, target, status));
+    return { view: status === 'ok' ? 'full' : status === 'limited_view' ? 'limited' : status, renewed };
+  } finally { await page.close(); }
+}
+
 /** Opens Maps once and reports whether Google treats this browser (profile) as signed in. */
 export async function checkSession(browser, options) {
   return (await refreshSession(browser, options)).session;
@@ -284,11 +387,12 @@ export async function sessionState(page) {
 }
 
 export async function readPlace(page, place, { maxImages = 12, maxMenuImages = 20, maxScrolls = 20,
-  includeReviews = false, maxReviews = 100, maxReviewScrolls = 25, reviewSort = 'relevant', onProgress } = {}) {
+  includeReviews = false, maxReviews = 100, maxReviewScrolls = 25, reviewSort = 'relevant', recoverView = true, onProgress } = {}) {
   const target = normalizePlaceUrl(place?.google_maps_url || place?.url);
   if (!target) throw new Error('INVALID_MAPS_URL');
   await navigatePlace(page, target);
-  const status = await pageStatus(page);
+  let status = await pageStatus(page);
+  if (status === 'limited_view' && recoverView) ({ status } = await recoverFullView(page, target, status));
   const canonical = safeMapsUrl(page.url()) || target;
   const session = await sessionState(page);
   const identity = placeIdentity(canonical) || placeIdentity(target);
