@@ -172,3 +172,37 @@ test('place metadata uses business coordinates and lossless identity', () => {
   assert.equal(placeMetadata('https://www.google.com/maps/place/Cafe/@36.8,30.8,14z').latitude, undefined);
   assert.equal(placeMetadata('https://www.google.com/maps/?cid=123').cid, '123');
 });
+
+test('About tab is read on limited views that show only Overview and About', async () => {
+  await fixture(`<main role="main"><div role="tablist">
+    <button role="tab">Genel Bakış</button><button role="tab" id="about">Hakkında</button>
+    </div><section role="region" aria-label="Test Cafe hakkında" hidden>
+      <h2>Erişilebilirlik</h2><ul><li><span aria-label="Tekerlekli sandalyeye uygun giriş yok">Tekerlekli sandalyeye uygun giriş</span></li></ul>
+    </section><script>document.querySelector('#about').onclick=()=>document.querySelector('[role=region]').hidden=false;</script></main>`, async page => {
+    const result = await extractAboutDetails(page);
+    assert.equal(result.status, 'ok');
+    assert.deepEqual(result.attributes.map(row => [row.name, row.available]), [['Tekerlekli sandalyeye uygun giriş', false]]);
+  });
+});
+
+test('hours that open on their own panel page are read there, then the place panel is restored', async () => {
+  const days = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
+  const table = rows => `<table>${days.map(day => `<tr><td><div>${day}</div></td><td role="text"><li>${rows}</li></td><td><button aria-label="${day}, kopyala"></button></td></tr>`).join('')}</table>`;
+  await fixture(`<div role="main" id="place"><h1>Test Cafe</h1>
+      <button data-item-id="address" aria-label="Adres: Lara Cd. 1">Lara Cd. 1</button>
+      <button data-item-id="oh" aria-label="Açık · Kapanış saati: 23:00·Diğer saatlere bakın">Açık</button></div>
+    <div role="main" id="hours" hidden><button aria-label="Geri">←</button><h1>Çalışma saatleri</h1>
+      <span>Test Cafe</span>${table('12:00–23:00')}<span>Teslimat</span>${table('13:00–22:00')}</div>
+    <script>
+      document.querySelector('[data-item-id=oh]').onclick = () => setTimeout(() => {
+        document.querySelector('#place').hidden = true; document.querySelector('#hours').hidden = false; }, 2500);
+      document.querySelector('[aria-label=Geri]').onclick = () => {
+        document.querySelector('#hours').hidden = true; document.querySelector('#place').hidden = false; };
+    </script>`, async page => {
+    const details = await extractPlaceDetails(page);
+    assert.equal(details.name, 'Test Cafe');
+    assert.equal(details.address, 'Lara Cd. 1');
+    assert.deepEqual(details.opening_hours_rows.map(row => [row.day, row.hours]), days.map(day => [day, '12:00–23:00']));
+    assert.equal(await page.evaluate(() => document.querySelector('#place').hidden), false);
+  });
+});

@@ -183,7 +183,8 @@ export async function extractAboutDetails(page) {
     const tablist = tabs.find(tab => {
       const list = tab.closest('[role="tablist"]');
       const names = [...(list?.querySelectorAll('[role="tab"]') || [])].map(item => normalize(item.textContent));
-      return names.some(name => /^(?:genel bakis|overview)$/.test(name)) && names.some(name => /^(?:yorumlar|reviews)$/.test(name));
+      // Limited views show only Overview and About, so the Reviews tab is not required.
+      return names.some(name => /^(?:genel bakis|overview)$/.test(name)) && names.some(name => /^(?:hakkinda|about)$/.test(name));
     })?.closest('[role="tablist"]');
     const tab = [...(tablist?.querySelectorAll('[role="tab"]') || [])].find(item => /^(?:hakkinda|about)$/.test(normalize(item.textContent)));
     if (!tab) return false;
@@ -248,6 +249,28 @@ export async function extractAboutDetails(page) {
   return { status, description, attributes: [...allAttributes.values()], truncated: !exhausted };
 }
 
+// Places with several kinds of hours (delivery, takeaway …) open them on their own panel page.
+const HOURS_PAGE = `[...document.querySelectorAll('h1')].some(node => node.getClientRects().length &&
+  /^(?:çalışma saatleri|hours|opening hours)$/i.test(node.innerText.trim()))`;
+
+// Serialized by Puppeteer. The first row per day is the business's own hours; later sections (Teslimat …) repeat days.
+function readHoursRows() {
+  const clean = value => String(value || '').replace(/\s+/g, ' ').trim();
+  const days = /^(?:pazartesi|salı|çarşamba|perşembe|cuma|cumartesi|pazar|monday|tuesday|wednesday|thursday|friday|saturday|sunday)(?:\s|$|[,.:])/i;
+  const rows = [], seen = new Set();
+  for (const row of document.querySelectorAll('tr, [role="row"]')) {
+    if (!row.getClientRects().length) continue;
+    const cells = [...row.querySelectorAll('td, th, [role="cell"], [role="rowheader"]')]
+      .map(cell => clean(cell.innerText || cell.textContent).replace(/[-]/g, '').trim()).filter(Boolean);
+    if (cells.length < 2 || !days.test(cells[0])) continue;
+    const day = cells[0].replace(/[,:]$/, '');
+    const hours = cells.slice(1).filter(value => !/^(?:suggest|öner)/i.test(value)).join('; ');
+    const key = day.toLocaleLowerCase('tr');
+    if (!seen.has(key) && hours) { rows.push({ day, hours }); seen.add(key); }
+  }
+  return rows;
+}
+
 export async function extractPlaceDetails(page, { expandHours = true } = {}) {
   let details = await page.evaluate(readDetailsDom);
   const openingSummary = details.opening_hours;
@@ -267,15 +290,29 @@ export async function extractPlaceDetails(page, { expandHours = true } = {}) {
       let clicked = false;
       const previousDialogs = await page.evaluate(() => [...document.querySelectorAll('[role="dialog"]')].filter(node => node.getClientRects().length).length);
       try {
-        await trigger.click(); clicked = true;
-        await page.waitForFunction(() => [...document.querySelectorAll('tr, [role="row"]')].some(row => row.getClientRects().length && /monday|tuesday|wednesday|thursday|friday|saturday|sunday|pazartesi|salı|çarşamba|perşembe|cuma|cumartesi|pazar/i.test(row.innerText || '')), { timeout: 1800 }).catch(() => {});
-        details = await page.evaluate(readDetailsDom);
-        if (openingSummary) details.opening_hours = openingSummary;
+        // A DOM click: a mouse click on the "Diğer saatlere bakın" row does not reach Maps' handler.
+        await trigger.evaluate(node => node.click()); clicked = true;
+        // Hours open inline, in a dialog or on their own panel page; the panel page takes a few seconds.
+        await page.waitForFunction(() => [...document.querySelectorAll('tr, [role="row"]')].some(row => row.getClientRects().length && /monday|tuesday|wednesday|thursday|friday|saturday|sunday|pazartesi|salı|çarşamba|perşembe|cuma|cumartesi|pazar/i.test(row.innerText || '')), { timeout: 6000 }).catch(() => {});
+        if (await page.evaluate(HOURS_PAGE)) {
+          // The place heading is gone on that page: keep the details already read, take only the rows.
+          const rows = await page.evaluate(readHoursRows);
+          if (rows.length) details = { ...details, opening_hours_rows: rows };
+        } else {
+          details = await page.evaluate(readDetailsDom);
+          if (openingSummary) details.opening_hours = openingSummary;
+        }
       } catch { /* Keep the already-extracted place details if hours cannot open. */ }
       finally {
         if (clicked) {
-          const currentDialogs = await page.evaluate(() => [...document.querySelectorAll('[role="dialog"]')].filter(node => node.getClientRects().length).length).catch(() => previousDialogs);
-          if (currentDialogs > previousDialogs) await page.keyboard.press('Escape').catch(() => {});
+          if (await page.evaluate(HOURS_PAGE).catch(() => false)) {
+            await page.evaluate(() => [...document.querySelectorAll('button[aria-label]')].find(node => node.getClientRects().length &&
+              /^(?:geri|back)$/i.test(node.getAttribute('aria-label')))?.click()).catch(() => {});
+            await page.waitForFunction(`!(${HOURS_PAGE})`, { timeout: 5000 }).catch(() => {});
+          } else {
+            const currentDialogs = await page.evaluate(() => [...document.querySelectorAll('[role="dialog"]')].filter(node => node.getClientRects().length).length).catch(() => previousDialogs);
+            if (currentDialogs > previousDialogs) await page.keyboard.press('Escape').catch(() => {});
+          }
         }
       }
     }
