@@ -85,10 +85,32 @@ function normalizeCookie(raw, nowSeconds) {
   return { cookie };
 }
 
-/** Accept Cookie Editor/Puppeteer arrays and Playwright storageState objects. */
+const isQuickManagerRow = row => isRecord(row) && typeof row['Name raw'] === 'string' && 'Host raw' in row;
+
+/**
+ * Cookie Quick Manager (Firefox) rows: "Host raw" is a URL such as https://.google.com/, flags are "true"/"false"
+ * strings. It exports every cookie store; when private-window stores are present only those are kept, because a
+ * private window is where a dedicated session is signed in.
+ */
+function fromQuickManager(rows) {
+  const isPrivate = row => /private/i.test(String(row['Store raw'] || ''));
+  const kept = rows.some(isPrivate) ? rows.filter(isPrivate) : rows;
+  return kept.map(row => {
+    let domain;
+    try { domain = new URL(String(row['Host raw'])).hostname; } catch { domain = undefined; }
+    const expires = Number(row['Expires raw']);
+    return { name: row['Name raw'], value: row['Content raw'], domain, path: row['Path raw'] || '/',
+      secure: row['Send for raw'] === 'true', httpOnly: row['HTTP only raw'] === 'true',
+      hostOnly: row['This domain only raw'] === 'true', sameSite: row['SameSite raw'] || undefined,
+      ...(Number.isFinite(expires) && expires > 0 ? { expirationDate: expires } : { session: true }) };
+  });
+}
+
+/** Accept Cookie Editor/Puppeteer arrays, Playwright storageState objects and Cookie Quick Manager exports. */
 export function normalizeGoogleCookies(input, { nowSeconds = Date.now() / 1000 } = {}) {
-  const rows = Array.isArray(input) ? input : isRecord(input) ? input.cookies : undefined;
+  let rows = Array.isArray(input) ? input : isRecord(input) ? input.cookies : undefined;
   if (!Array.isArray(rows)) throw fail('MAPS_COOKIES_INVALID_FORMAT');
+  if (rows.some(isQuickManagerRow)) rows = fromQuickManager(rows.filter(isQuickManagerRow));
   const stats = { total: rows.length, accepted: 0, expired: 0, invalid: 0, foreign: 0, duplicates: 0 };
   const unique = new Map();
   for (const raw of rows) {

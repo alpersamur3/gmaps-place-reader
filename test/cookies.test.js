@@ -133,3 +133,22 @@ test('CLI accepts paths without interpolation; missing or ambiguous arguments re
   assert.throws(() => cookieOptionsFromArgs(['--cookies-file=x', '--cookies-file=y']), { message: 'INVALID_ARGUMENT' });
   assert.throws(() => cookieOptionsFromArgs(['--unknown']), { message: 'INVALID_ARGUMENT' });
 });
+
+test('Cookie Quick Manager (Firefox) export keeps only the private-window store and Google domains', () => {
+  const row = (store, overrides = {}) => ({ 'Host raw': 'https://.google.com/', 'Name raw': 'TEST_AUTH', 'Path raw': '/',
+    'Content raw': 'synthetic-value', 'Expires raw': String(nowSeconds + 3600), 'Send for raw': 'true', 'HTTP only raw': 'true',
+    'SameSite raw': 'no_restriction', 'This domain only raw': 'false', 'Store raw': store, ...overrides });
+  const { cookies, stats } = normalizeGoogleCookies([
+    row('firefox-default', { 'Content raw': 'signed-out-value' }),
+    row('firefox-private'),
+    row('firefox-private', { 'Host raw': 'https://accounts.google.com/', 'Name raw': '__Host-TEST', 'This domain only raw': 'true',
+      'SameSite raw': 'unspecified' }),
+    row('firefox-private', { 'Host raw': 'http://.youtube.com/', 'Name raw': 'OTHER' }),
+  ], { nowSeconds });
+  assert.deepEqual(cookies.map(item => [item.name, item.value, item.domain, item.sameSite, item.expires]), [
+    ['TEST_AUTH', 'synthetic-value', '.google.com', 'None', nowSeconds + 3600],
+    ['__Host-TEST', 'synthetic-value', 'accounts.google.com', undefined, nowSeconds + 3600],
+  ]);
+  assert.equal(stats.total, 3);
+  assert.equal(stats.foreign, 1);
+});
