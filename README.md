@@ -89,11 +89,11 @@ try {
 Helpers: `normalizePlaceUrl(url)` (check a link before launching a browser), `fullImageUrl(url)` (large variant of a Google photo URL), `placeIdentity(url)`, `pageStatus(page)`, `sessionState(page)`, `passConsent(page)`, `parseRelativeAge(label)`, `estimateReviewDate(label)`.
 Subpath exports: `gmaps-place-reader/media`, `/details`, `/reviews`, `/cookies`.
 
-Review options: `includeReviews` (default `false`), `maxReviews` (100, up to 10,000), `maxReviewScrolls` (25, up to 1,000 — each step loads about 10 reviews), `reviewSort` (`relevant` · `newest` · `highest` · `lowest`). Review fields: `review_id`, `author`, `author_summary`, `rating`, `text`, `date_label`, `date_iso`, `date_estimate`, `date_precision` (`exact`, `day`, `week`, `month`, `year` …), `edited`, `translated`, `photos`, `owner_response`, `likes`, `language`.
+Review options: `includeReviews` (default `false`), `maxReviews` (100, up to 10,000), `maxReviewScrolls` (25, up to 1,000 — each step loads about 10 reviews), `reviewSort` (`relevant` · `newest` · `highest` · `lowest`). Review fields: `review_id`, `author`, `author_summary`, `rating`, `text`, `date_label`, `date_iso`, `date_estimate`, `date_precision` (`exact`, `day`, `week`, `month`, `year` …), `edited`, `edited_estimate` (approximate edit date of an edited review), `translated`, `photos`, `owner_response`, `likes`, `language`, `details` (the structured lines under a review: sub-ratings such as `{ name: 'Yiyecek', value: '5' }` and rows such as `{ name: 'Kişi başı fiyat', value: '₺400–600' }`). The `reviews` result also reports `sort_label` and `sort_applied`; when the requested order could not be chosen, `warnings` contains `REVIEW_SORT_NOT_APPLIED`.
 
 Every result carries `session` (`signed_in` · `signed_out` · `unknown`). When cookies were loaded but Google still shows the session as signed out, `warnings` contains `COOKIES_NOT_SIGNED_IN`.
 
-**Statuses:** `ok`, `incomplete` (some parts could not be read, see `warnings`), `limited_view`, `auth_required`, `consent_required`, `blocked`, `unavailable`.
+**Statuses:** `ok`, `incomplete` (some parts could not be read, see `warnings`), `limited_view`, `auth_required`, `consent_required`, `blocked`, `unavailable`. Common warnings: `MENU_PHOTOS_UNAVAILABLE` (menu items were read but the menu photo album could not be opened), `REVIEWS_UNAVAILABLE`, `REVIEW_SORT_NOT_APPLIED`, `COOKIES_NOT_SIGNED_IN`, and `…_LIMIT_OR_SCROLL_LIMIT` when your own limits stopped a list.
 
 ### Command line
 
@@ -113,7 +113,7 @@ MAPS_PROFILE_DIR=/absolute/private/profile npx gmaps-login
 
 # Servers / SSH: load an exported cookie file into a profile once, then check it any time
 MAPS_PROFILE_DIR=/absolute/private/profile npx gmaps-session import ./google-cookies.json
-MAPS_PROFILE_DIR=/absolute/private/profile npx gmaps-session check   # exit code 0 = signed in, 3 = not
+MAPS_PROFILE_DIR=/absolute/private/profile npx gmaps-session check   # exit code 0 = signed in, 3 = not; run it hourly to keep the session rotated
 ```
 
 You can also pass a place URL directly and request detailed reviews:
@@ -127,7 +127,7 @@ npx gmaps-place --url "https://maps.app.goo.gl/your-place-link" --reviews --sort
 | Environment variable | Option | Purpose |
 |---|---|---|
 | `MAPS_CHROME_PATH` | `executablePath` | Chrome or Chromium binary |
-| `MAPS_COOKIES_FILE` | `cookiesFile` | Google cookie export (Cookie-Editor JSON, Puppeteer cookies or Playwright storage state). Only `google.com` and `google.com.tr` cookies are loaded. |
+| `MAPS_COOKIES_FILE` | `cookiesFile` | Google cookie export (Cookie-Editor JSON, Cookie Quick Manager for Firefox, Puppeteer cookies or Playwright storage state). Only `google.com` and `google.com.tr` cookies are loaded. |
 | `MAPS_PROFILE_DIR` | `userDataDir` | Persistent, private browser profile (absolute path) |
 
 Priority: command-line flag, then the JSON request (`cookies_file`), then the environment. Errors never include file paths, cookie names or values; `cookie_stats` only reports counts.
@@ -145,7 +145,8 @@ Use a **separate** Google account (never your personal one) and keep its session
   $env:MAPS_PROFILE_DIR = "C:\gmaps-profile"; npx gmaps-login
   ```
 
-- **Server or SSH, no screen:** sign in on any computer, export the cookies with a browser extension such as Cookie-Editor, copy the file to the server and run `gmaps-session import <file>` once. Delete the file afterwards; the profile keeps the session. `gmaps-session check` tells you later whether it is still signed in (suitable for cron / monitoring).
+- **Server or SSH, no screen:** sign in on any computer, export the cookies with a browser extension such as Cookie-Editor, copy the file to the server and run `gmaps-session import <file>` once. Delete the file afterwards; the profile keeps the session. `gmaps-session check` tells you later whether it is still signed in; when it is, the command stays on Maps until Google has rotated the session cookies (`"rotated": true`), so running it **every hour from cron** also keeps the session alive.
+- **Imported sessions can be revoked.** In our tests Google signed a session out between a few minutes and about two hours after its cookies were moved to a server (another IP address and browser), also when the session was exported from a private window and not used anywhere else. Prefer signing in on the machine that runs the reader (`gmaps-login`), check imported sessions with `gmaps-session check` and expect to import again. A persistent profile without a session often still gets the full place details on a server.
 - Passing `cookiesFile` / `MAPS_COOKIES_FILE` on every run also works, but exported cookies go stale sooner than a profile, because Chrome binds Google sessions to the device.
 
 Every result reports `session`; `COOKIES_NOT_SIGNED_IN` means the cookies were loaded but Google no longer accepts them. Without a session you typically get far fewer details: no review count, no Menu tab, sometimes no Reviews tab at all.
@@ -256,11 +257,11 @@ try {
 Yardımcılar: `normalizePlaceUrl(url)` (tarayıcı açmadan bağlantıyı denetler), `fullImageUrl(url)` (Google fotoğraf adresinin büyük hali), `placeIdentity(url)`, `pageStatus(page)`, `sessionState(page)`, `passConsent(page)`, `parseRelativeAge(label)`, `estimateReviewDate(label)`.
 Alt yollar: `gmaps-place-reader/media`, `/details`, `/reviews`, `/cookies`.
 
-Yorum seçenekleri: `includeReviews` (varsayılan `false`), `maxReviews` (100, en fazla 10.000), `maxReviewScrolls` (25, en fazla 1.000 — her adım yaklaşık 10 yorum yükler), `reviewSort` (`relevant` · `newest` · `highest` · `lowest`). Yorum alanları: `review_id`, `author`, `author_summary`, `rating`, `text`, `date_label`, `date_iso`, `date_estimate`, `date_precision` (`exact`, `day`, `week`, `month`, `year` …), `edited`, `translated`, `photos`, `owner_response`, `likes`, `language`.
+Yorum seçenekleri: `includeReviews` (varsayılan `false`), `maxReviews` (100, en fazla 10.000), `maxReviewScrolls` (25, en fazla 1.000 — her adım yaklaşık 10 yorum yükler), `reviewSort` (`relevant` · `newest` · `highest` · `lowest`). Yorum alanları: `review_id`, `author`, `author_summary`, `rating`, `text`, `date_label`, `date_iso`, `date_estimate`, `date_precision` (`exact`, `day`, `week`, `month`, `year` …), `edited`, `edited_estimate` (düzenlenmiş yorumun yaklaşık düzenlenme tarihi), `translated`, `photos`, `owner_response`, `likes`, `language`, `details` (yorumun altındaki yapılandırılmış satırlar: `{ name: 'Yiyecek', value: '5' }` gibi alt puanlar ve `{ name: 'Kişi başı fiyat', value: '₺400–600' }` gibi satırlar). `reviews` sonucu ayrıca `sort_label` ve `sort_applied` bildirir; istenen sıralama seçilemezse `warnings` içinde `REVIEW_SORT_NOT_APPLIED` olur.
 
 Her sonuçta `session` (`signed_in` · `signed_out` · `unknown`) bulunur. Çerez yüklendiği hâlde Google oturumu kapalı gösteriyorsa `warnings` içinde `COOKIES_NOT_SIGNED_IN` olur.
 
-**Durumlar:** `ok`, `incomplete` (bazı kısımlar okunamadı, `warnings`e bakın), `limited_view`, `auth_required`, `consent_required`, `blocked`, `unavailable`.
+**Durumlar:** `ok`, `incomplete` (bazı kısımlar okunamadı, `warnings`e bakın), `limited_view`, `auth_required`, `consent_required`, `blocked`, `unavailable`. Sık uyarılar: `MENU_PHOTOS_UNAVAILABLE` (menü ürünleri okundu ama menü fotoğraf albümü açılamadı), `REVIEWS_UNAVAILABLE`, `REVIEW_SORT_NOT_APPLIED`, `COOKIES_NOT_SIGNED_IN` ve sizin koyduğunuz sınır bir listeyi durdurduysa `…_LIMIT_OR_SCROLL_LIMIT`.
 
 ### Komut satırı
 
@@ -280,7 +281,7 @@ MAPS_PROFILE_DIR=/mutlak/ozel/profil npx gmaps-login
 
 # Sunucu / SSH: dışa aktarılmış çerez dosyasını profile bir kez yükleyin, sonra istediğiniz zaman denetleyin
 MAPS_PROFILE_DIR=/mutlak/ozel/profil npx gmaps-session import ./google-cookies.json
-MAPS_PROFILE_DIR=/mutlak/ozel/profil npx gmaps-session check   # çıkış kodu 0 = oturum açık, 3 = değil
+MAPS_PROFILE_DIR=/mutlak/ozel/profil npx gmaps-session check   # çıkış kodu 0 = oturum açık, 3 = değil; oturumun yenilenmesi için saatte bir çalıştırın
 ```
 
 Mekan bağlantısını doğrudan verip ayrıntılı yorumları da isteyebilirsiniz:
@@ -294,7 +295,7 @@ npx gmaps-place --url "https://maps.app.goo.gl/mekan-linki" --reviews --sort new
 | Ortam değişkeni | Seçenek | Amaç |
 |---|---|---|
 | `MAPS_CHROME_PATH` | `executablePath` | Chrome ya da Chromium dosyası |
-| `MAPS_COOKIES_FILE` | `cookiesFile` | Google çerez dışa aktarımı (Cookie-Editor JSON, Puppeteer çerezleri ya da Playwright storage state). Yalnız `google.com` ve `google.com.tr` çerezleri yüklenir. |
+| `MAPS_COOKIES_FILE` | `cookiesFile` | Google çerez dışa aktarımı (Cookie-Editor JSON, Firefox için Cookie Quick Manager, Puppeteer çerezleri ya da Playwright storage state). Yalnız `google.com` ve `google.com.tr` çerezleri yüklenir. |
 | `MAPS_PROFILE_DIR` | `userDataDir` | Kalıcı, özel tarayıcı profili (mutlak yol) |
 
 Öncelik: komut satırı, ardından JSON istek (`cookies_file`), ardından ortam değişkeni. Hata mesajları dosya yolu, çerez adı ya da değeri içermez; `cookie_stats` yalnız sayıları verir.
@@ -312,7 +313,8 @@ npx gmaps-place --url "https://maps.app.goo.gl/mekan-linki" --reviews --sort new
   $env:MAPS_PROFILE_DIR = "C:\gmaps-profile"; npx gmaps-login
   ```
 
-- **Sunucu ya da SSH, ekran yok:** herhangi bir bilgisayarda oturum açın, çerezleri Cookie-Editor gibi bir eklentiyle dışa aktarın, dosyayı sunucuya kopyalayıp bir kez `gmaps-session import <dosya>` çalıştırın. Ardından dosyayı silin; oturum profilde kalır. `gmaps-session check` daha sonra oturumun hâlâ açık olup olmadığını söyler (cron / izleme için uygundur).
+- **Sunucu ya da SSH, ekran yok:** herhangi bir bilgisayarda oturum açın, çerezleri Cookie-Editor gibi bir eklentiyle dışa aktarın, dosyayı sunucuya kopyalayıp bir kez `gmaps-session import <dosya>` çalıştırın. Ardından dosyayı silin; oturum profilde kalır. `gmaps-session check` daha sonra oturumun hâlâ açık olup olmadığını söyler; oturum açıksa Google oturum çerezlerini yenileyene kadar Maps'te bekler (`"rotated": true`). Bu yüzden komutu **cron ile saatte bir** çalıştırmak oturumu da canlı tutar.
+- **İçe aktarılan oturumlar iptal edilebilir.** Testlerimizde Google, çerezleri sunucuya (başka IP adresi ve tarayıcı) taşınan bir oturumu birkaç dakika ile yaklaşık iki saat arasında kapattı; oturum gizli pencereden alınıp başka hiçbir yerde kullanılmadığında da. Mümkünse okuyucuyu çalıştıran makinede oturum açın (`gmaps-login`), içe aktarılan oturumu `gmaps-session check` ile denetleyin ve yeniden içe aktarmanız gerekebileceğini hesaba katın. Sunucuda oturumsuz ama kalıcı bir profil de çoğu zaman tam mekân bilgisini alır.
 - Her çalıştırmada `cookiesFile` / `MAPS_COOKIES_FILE` vermek de çalışır; ancak Chrome Google oturumunu cihaza bağladığı için dışa aktarılan çerezler profile göre daha çabuk geçersizleşir.
 
 Her sonuç `session` bildirir; `COOKIES_NOT_SIGNED_IN`, çerezlerin yüklendiğini ama Google'ın artık kabul etmediğini gösterir. Oturum yokken çok daha az bilgi gelir: yorum sayısı ve Menü sekmesi yoktur, bazen Yorumlar sekmesi de hiç görünmez.
