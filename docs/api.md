@@ -2,7 +2,7 @@
 
 [Türkçe](tr/api.md) · [Docs index](README.md)
 
-ESM only: `import { … } from 'gmaps-place-reader'`. Subpath exports: `gmaps-place-reader/media`, `/details`, `/reviews`.
+ESM only: `import { … } from 'gmaps-place-reader'`. Subpath exports: `gmaps-place-reader/media`, `/details`, `/reviews`, `/mcp` (the [MCP server](mcp.md): `createMcpServer`, `TOOLS`).
 
 ## Browser
 

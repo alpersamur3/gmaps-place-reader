@@ -2,7 +2,7 @@
 
 # gmaps-place-reader
 
-**Read Google Maps places with a real browser: business details, menu items and the complete dated menu album, and dated reviews. No Places API key, no Google account.**
+**Read Google Maps places with a real browser: business details, menu items and the complete dated menu album, and dated reviews. No Places API key, no Google account. Includes an MCP server for AI agents.**
 
 [![npm version](https://img.shields.io/npm/v/gmaps-place-reader.svg)](https://www.npmjs.com/package/gmaps-place-reader)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/alpersamur3/gmaps-place-reader/blob/main/LICENSE)
@@ -21,7 +21,7 @@
 
 ### Contents
 
-[Features](#features) · [Install](#install) · [Quick start](#quick-start) · [Documentation](#documentation) · [API](#api) · [Command line](#command-line) · [Configuration](#configuration) · [Full view without an account](#full-view-without-an-account) · [Limitations](#limitations) · [Disclaimer](#disclaimer)
+[Features](#features) · [Install](#install) · [Quick start](#quick-start) · [Documentation](#documentation) · [API](#api) · [Command line](#command-line) · [MCP server](#mcp-server) · [Configuration](#configuration) · [Full view without an account](#full-view-without-an-account) · [Limitations](#limitations) · [Disclaimer](#disclaimer)
 
 ### Features
 
@@ -33,6 +33,7 @@
 - **Full view without an account.** Google shows anonymous browsers either a limited or the full place page. A persistent profile keeps the full view, and the reader repairs a limited view by itself; every result says which view it got (`view`). A Google account would add nothing: in our tests a signed-in session returned exactly the same data. See [Full view without an account](docs/full-view.md).
 - **Detailed, dated reviews on request:** reviewer, rating (rating-only reviews included), full text, owner response, likes, attached photos, sub-ratings and other details (`Yiyecek: 5`, price per person …), edit and "translated by Google" markers. Each review gets its **exact posting date** (`date_iso`) read from the data Google sends to the page, checked against the "2 months ago" label; otherwise an approximate date (`date_estimate`) with its precision. Optional **newest-first** order (`reviewSort: 'newest'`); the list is paged to the end, so every review can be read.
 - **One-link lookup:** pass a Google Maps link to `readPlaceUrl` or `gmaps-place --url ...` — `maps.app.goo.gl` share links, links on any Google country domain (`google.com.tr`, …), `?cid=` links, and links copied while the Menu or Reviews tab was open.
+- **MCP server for AI agents** (`gmaps-mcp`): Claude Code, Claude Desktop and other MCP clients can search places, read details, menus and reviews, and look at photos, e.g. to read a menu page. See [MCP server](docs/mcp.md).
 - **General photos** from the place gallery; menu photos, avatars and size variants of the same image are removed.
 - **EU cookie consent** is handled by choosing **"Reject all"**; nothing is ever accepted.
 - **Honest results:** missing data is never reported as "absent". Statuses and warnings (`limited_view`, `consent_required`, `blocked`, `truncated`, …) tell you exactly what could not be read.
@@ -75,7 +76,7 @@ try {
 
 ### Documentation
 
-Detailed documentation lives in [`docs/`](docs/README.md): [full view without an account](docs/full-view.md) · [API reference](docs/api.md) · [data reference](docs/data.md) (every field) · [command line](docs/cli.md) · [statuses, warnings and troubleshooting](docs/troubleshooting.md).
+Detailed documentation lives in [`docs/`](docs/README.md): [full view without an account](docs/full-view.md) · [API reference](docs/api.md) · [data reference](docs/data.md) (every field) · [command line](docs/cli.md) · [MCP server](docs/mcp.md) · [statuses, warnings and troubleshooting](docs/troubleshooting.md).
 
 ### API
 
@@ -116,6 +117,17 @@ echo '{"schema_version":"gmaps.scan.request.v1","location":"Kadıköy, İstanbul
 MAPS_PROFILE_DIR=/absolute/private/profile npx gmaps-view
 ```
 
+### MCP server
+
+`gmaps-mcp` lets AI agents (Claude Code, Claude Desktop and other MCP clients) use the reader through four tools: `search`, `place`, `reviews` (without reviewer names) and `photos` (Google photos returned as images, e.g. to read a menu page). It runs locally with your Chrome; no API key or account.
+
+```bash
+# Claude Code
+claude mcp add gmaps -e MAPS_PROFILE_DIR=/absolute/path/gmaps-profile -- npx -y -p gmaps-place-reader gmaps-mcp
+```
+
+Claude Desktop and other clients, every tool argument and the limits (`MAPS_MCP_MAX_READS`, `MAPS_MCP_MAX_PHOTOS`, `MAPS_MCP_PAUSE_MS`): [docs/mcp.md](docs/mcp.md).
+
 ### Configuration
 
 | Environment variable | Option | Purpose |
@@ -123,7 +135,7 @@ MAPS_PROFILE_DIR=/absolute/private/profile npx gmaps-view
 | `MAPS_CHROME_PATH` | `executablePath` | Chrome or Chromium binary |
 | `MAPS_PROFILE_DIR` | `userDataDir` | Persistent, private browser profile (absolute path). **Recommended:** it keeps the full view. |
 
-Command-line flags and JSON request fields take priority over the environment.
+Command-line flags and JSON request fields take priority over the environment. The MCP server adds its own limits ([MCP server](docs/mcp.md)).
 
 ### Full view without an account
 
@@ -148,7 +160,7 @@ Chrome or Chromium is needed in every case. It runs headless, so no desktop is r
 
 ### Disclaimer
 
-**Use at your own risk.** This project is not affiliated with or endorsed by Google. Automated access to Google Maps may conflict with the [Google Maps Terms of Service](https://www.google.com/help/terms_maps/). You are responsible for how you use this library and for complying with the applicable terms and laws. Photos, reviews and texts belong to their respective owners.
+**Use at your own risk.** This project is not affiliated with or endorsed by Google. Automated access to Google Maps may conflict with the [Google Maps Terms of Service](https://www.google.com/help/terms_maps/). It is meant for personal and research use at low volumes. You are responsible for how you use this library and for complying with the applicable terms and laws. Photos, reviews and texts belong to their respective owners.
 
 ### Development
 
@@ -172,7 +184,7 @@ Issues and pull requests are welcome.
 
 ### İçindekiler
 
-[Özellikler](#özellikler) · [Kurulum](#kurulum) · [Hızlı başlangıç](#hızlı-başlangıç) · [Dokümantasyon](#dokümantasyon) · [API](#api-1) · [Komut satırı](#komut-satırı) · [Yapılandırma](#yapılandırma) · [Hesapsız tam görünüm](#hesapsız-tam-görünüm) · [Sınırlar](#sınırlar) · [Sorumluluk reddi](#sorumluluk-reddi)
+[Özellikler](#özellikler) · [Kurulum](#kurulum) · [Hızlı başlangıç](#hızlı-başlangıç) · [Dokümantasyon](#dokümantasyon) · [API](#api-1) · [Komut satırı](#komut-satırı) · [MCP sunucusu](#mcp-sunucusu) · [Yapılandırma](#yapılandırma) · [Hesapsız tam görünüm](#hesapsız-tam-görünüm) · [Sınırlar](#sınırlar) · [Sorumluluk reddi](#sorumluluk-reddi)
 
 ### Özellikler
 
@@ -184,6 +196,7 @@ Issues and pull requests are welcome.
 - **Hesapsız tam görünüm.** Google oturumsuz tarayıcılara mekân sayfasının ya sınırlı ya da tam sürümünü gösterir. Kalıcı bir profil tam görünümü korur, okuyucu sınırlı görünümü kendisi onarır; her sonuç hangi görünümü aldığını söyler (`view`). Google hesabı bir şey kazandırmaz: testlerimizde oturum açık bir profil birebir aynı veriyi döndürdü. Bkz. [Hesapsız tam görünüm](docs/tr/full-view.md).
 - **Ayrıntılı, tarihli yorumlar (isteğe bağlı):** yorumcu, yıldız (yalnız yıldız verilenler dahil), tam metin, işletme yanıtı, beğeni, yorum fotoğrafları, alt puanlar ve diğer detaylar (`Yiyecek: 5`, kişi başı fiyat …), düzenleme ve "Google tarafından çevrildi" işaretleri. Her yorumun **kesin yayın tarihi** (`date_iso`), Google'ın sayfaya gönderdiği veriden okunur ve ekrandaki "2 ay önce" etiketiyle doğrulanır; okunamazsa yaklaşık tarih (`date_estimate`) ve hassasiyeti verilir. İsteğe bağlı **en yeniden eskiye** sıralama (`reviewSort: 'newest'`); liste sonuna kadar sayfalandığı için bütün yorumlar okunabilir.
 - **Tek bağlantıyla sorgu:** Google Maps bağlantısını `readPlaceUrl` ya da `gmaps-place --url ...` komutuna verin — `maps.app.goo.gl` paylaşım bağlantıları, tüm Google ülke alan adları (`google.com.tr` …), `?cid=` bağlantıları ve Menü/Yorumlar sekmesi açıkken kopyalanan bağlantılar kabul edilir.
+- **Yapay zekâ ajanları için MCP sunucusu** (`gmaps-mcp`): Claude Code, Claude Desktop ve diğer MCP istemcileri mekân arayabilir; bilgileri, menüleri ve yorumları okuyabilir; fotoğraflara bakabilir, ör. menü sayfası okumak için. Bkz. [MCP sunucusu](docs/tr/mcp.md).
 - İşletme galerisinden **genel fotoğraflar**; menü fotoğrafları, profil resimleri ve aynı görselin farklı boyutları ayıklanır.
 - AB'deki **çerez onayı** sayfasında yalnız **"Tümünü reddet"** seçilir; hiçbir şey kabul edilmez.
 - **Dürüst sonuçlar:** okunamayan veri hiçbir zaman "yok" diye raporlanmaz. Durumlar ve uyarılar (`limited_view`, `consent_required`, `blocked`, `truncated`, …) neyin okunamadığını açıkça söyler.
@@ -226,7 +239,7 @@ try {
 
 ### Dokümantasyon
 
-Ayrıntılı dokümantasyon [`docs/tr/`](docs/tr/README.md) altında: [hesapsız tam görünüm](docs/tr/full-view.md) · [API başvurusu](docs/tr/api.md) · [veri başvurusu](docs/tr/data.md) (her alan) · [komut satırı](docs/tr/cli.md) · [durumlar, uyarılar ve sorun giderme](docs/tr/troubleshooting.md).
+Ayrıntılı dokümantasyon [`docs/tr/`](docs/tr/README.md) altında: [hesapsız tam görünüm](docs/tr/full-view.md) · [API başvurusu](docs/tr/api.md) · [veri başvurusu](docs/tr/data.md) (her alan) · [komut satırı](docs/tr/cli.md) · [MCP sunucusu](docs/tr/mcp.md) · [durumlar, uyarılar ve sorun giderme](docs/tr/troubleshooting.md).
 
 ### API
 
@@ -267,6 +280,17 @@ echo '{"schema_version":"gmaps.scan.request.v1","location":"Kadıköy, İstanbul
 MAPS_PROFILE_DIR=/mutlak/ozel/profil npx gmaps-view
 ```
 
+### MCP sunucusu
+
+`gmaps-mcp`, yapay zekâ ajanlarının (Claude Code, Claude Desktop ve diğer MCP istemcileri) okuyucuyu dört araçla kullanmasını sağlar: `search`, `place`, `reviews` (yorumcu adları olmadan) ve `photos` (Google fotoğraflarını görsel olarak döndürür, ör. menü sayfası okumak için). Kendi Chrome'unuzla yerelde çalışır; API anahtarı ya da hesap gerekmez.
+
+```bash
+# Claude Code
+claude mcp add gmaps -e MAPS_PROFILE_DIR=/mutlak/yol/gmaps-profile -- npx -y -p gmaps-place-reader gmaps-mcp
+```
+
+Claude Desktop ve diğer istemciler, araçların bütün argümanları ve sınırlar (`MAPS_MCP_MAX_READS`, `MAPS_MCP_MAX_PHOTOS`, `MAPS_MCP_PAUSE_MS`): [docs/tr/mcp.md](docs/tr/mcp.md).
+
 ### Yapılandırma
 
 | Ortam değişkeni | Seçenek | Amaç |
@@ -274,7 +298,7 @@ MAPS_PROFILE_DIR=/mutlak/ozel/profil npx gmaps-view
 | `MAPS_CHROME_PATH` | `executablePath` | Chrome ya da Chromium dosyası |
 | `MAPS_PROFILE_DIR` | `userDataDir` | Kalıcı, özel tarayıcı profili (mutlak yol). **Önerilir:** tam görünümü korur. |
 
-Komut satırı bayrakları ve JSON istek alanları ortam değişkenlerinden önce gelir.
+Komut satırı bayrakları ve JSON istek alanları ortam değişkenlerinden önce gelir. MCP sunucusunun kendi sınırları vardır ([MCP sunucusu](docs/tr/mcp.md)).
 
 ### Hesapsız tam görünüm
 
@@ -299,7 +323,7 @@ Her durumda Chrome ya da Chromium gerekir. Görünmez modda çalıştığı içi
 
 ### Sorumluluk reddi
 
-**Kendi riskinizde kullanın.** Bu proje Google ile bağlantılı değildir ve Google tarafından onaylanmamıştır. Google Maps'e otomatik erişim [Google Haritalar Hizmet Şartları](https://www.google.com/help/terms_maps/) ile çelişebilir. Kütüphaneyi nasıl kullandığınızdan, ilgili şartlara ve yasalara uymaktan siz sorumlusunuz. Fotoğraf, yorum ve metinler sahiplerine aittir.
+**Kendi riskinizde kullanın.** Bu proje Google ile bağlantılı değildir ve Google tarafından onaylanmamıştır. Google Maps'e otomatik erişim [Google Haritalar Hizmet Şartları](https://www.google.com/help/terms_maps/) ile çelişebilir. Kişisel ve araştırma amaçlı, düşük hacimli kullanım içindir. Kütüphaneyi nasıl kullandığınızdan, ilgili şartlara ve yasalara uymaktan siz sorumlusunuz. Fotoğraf, yorum ve metinler sahiplerine aittir.
 
 ### Geliştirme
 

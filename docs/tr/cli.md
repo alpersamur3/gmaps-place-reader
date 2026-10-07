@@ -2,7 +2,7 @@
 
 [English](../cli.md) · [Doküman dizini](README.md)
 
-Her komut stdout'a tek bir JSON nesnesi yazar. Başarıda `0`, hatada `2` ile çıkar (`error_code` ile birlikte); `gmaps-view`, "tam görünüm değil" için `3` kullanır. Yapılandırma önce bayraklardan, sonra JSON isteğinden, en son ortam değişkenlerinden (`MAPS_CHROME_PATH`, `MAPS_PROFILE_DIR`) gelir. Hesap kullanılmaz, çerez yüklenmez.
+Her komut stdout'a tek bir JSON nesnesi yazar. Başarıda `0`, hatada `2` ile çıkar (`error_code` ile birlikte); `gmaps-view`, "tam görünüm değil" için `3` kullanır. Yapılandırma önce bayraklardan, sonra JSON isteğinden, en son ortam değişkenlerinden (`MAPS_CHROME_PATH`, `MAPS_PROFILE_DIR`) gelir. Hesap kullanılmaz, çerez yüklenmez. Yapay zekâ ajanları için MCP sunucusu `gmaps-mcp`'nin kendi sayfası var: [MCP sunucusu](mcp.md).
 
 ## gmaps-place — linkten tek mekân
 

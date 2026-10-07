@@ -2,7 +2,7 @@
 
 [Türkçe](tr/cli.md) · [Docs index](README.md)
 
-All commands print one JSON object to stdout. They exit with `0` on success and `2` on errors (with `error_code`); `gmaps-view` uses `3` for "not the full view". Configuration comes from flags, then the JSON request, then the environment (`MAPS_CHROME_PATH`, `MAPS_PROFILE_DIR`). No account is used and no cookies are loaded.
+All commands print one JSON object to stdout. They exit with `0` on success and `2` on errors (with `error_code`); `gmaps-view` uses `3` for "not the full view". Configuration comes from flags, then the JSON request, then the environment (`MAPS_CHROME_PATH`, `MAPS_PROFILE_DIR`). No account is used and no cookies are loaded. The MCP server for AI agents, `gmaps-mcp`, has its own page: [MCP server](mcp.md).
 
 ## gmaps-place — one place by link
 

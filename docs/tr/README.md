@@ -8,6 +8,7 @@
 | [API başvurusu](api.md) | Her fonksiyon ve seçenek. |
 | [Veri başvurusu](data.md) | Mekân, menü, fotoğraf, yorum ve kayıtların her alanı. |
 | [Komut satırı](cli.md) | `gmaps-place`, `gmaps-scan`, `gmaps-view`, istek ve yanıt JSON'ları, hata kodları. |
+| [MCP sunucusu](mcp.md) | Yapay zekâ ajanları için `gmaps-mcp` (Claude Code, Claude Desktop, diğer MCP istemcileri): kurulum, araçlar, sınırlar. |
 | [Durumlar, uyarılar ve sorun giderme](troubleshooting.md) | Her durumun ve uyarının anlamı ve ne yapılacağı. |
 
 ## Hızlı tarifler

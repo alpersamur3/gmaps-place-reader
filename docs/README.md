@@ -8,6 +8,7 @@
 | [API reference](api.md) | Every function and option. |
 | [Data reference](data.md) | Every field of places, menus, photos, reviews and observations. |
 | [Command line](cli.md) | `gmaps-place`, `gmaps-scan`, `gmaps-view`, request and response JSON, error codes. |
+| [MCP server](mcp.md) | `gmaps-mcp` for AI agents (Claude Code, Claude Desktop, other MCP clients): setup, tools, limits. |
 | [Statuses, warnings and troubleshooting](troubleshooting.md) | What each status and warning means and what to do. |
 
 ## Quick recipes

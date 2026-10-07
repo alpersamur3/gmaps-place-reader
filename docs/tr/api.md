@@ -2,7 +2,7 @@
 
 [English](../api.md) · [Doküman dizini](README.md)
 
-Yalnız ESM: `import { … } from 'gmaps-place-reader'`. Alt yol dışa aktarımları: `gmaps-place-reader/media`, `/details`, `/reviews`.
+Yalnız ESM: `import { … } from 'gmaps-place-reader'`. Alt yol dışa aktarımları: `gmaps-place-reader/media`, `/details`, `/reviews`, `/mcp` ([MCP sunucusu](mcp.md): `createMcpServer`, `TOOLS`).
 
 ## Tarayıcı
 
