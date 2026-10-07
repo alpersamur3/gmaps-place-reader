@@ -21,7 +21,7 @@ What `readPlace` / `readPlaceUrl` return, and the flat record `toObservation` / 
 | `attributes` | About tab: `[{ category, name, label, available }]`, e.g. `{ category: 'Erişilebilirlik', name: 'Tekerlekli sandalyeye uygun giriş', available: false }`. |
 | `about_status`, `about_coverage_complete` | Whether the About tab was read completely. |
 | `menu` | See below. |
-| `photos` | `{ status, images: [{ url, width, height, label, category }], truncated }`: general gallery photos, menu photos excluded. |
+| `photos` | `{ status, images: [{ url, width, height, label, category }], truncated, reason? }`: general gallery photos, menu photos excluded. `reason: 'PHOTO_GALLERY_NOT_OPENED'` when only the overview's photos could be read. |
 | `reviews` | Only with `includeReviews: true`. See below. |
 | `warnings` | Codes such as `LIMITED_VIEW`, `MENU_PHOTOS_UNAVAILABLE`, `REVIEWS_LIMIT_OR_SCROLL_LIMIT` (see [Troubleshooting](troubleshooting.md)). |
 | `data_quality` | `{ partial, review_count_observed, menu_coverage_complete, review_coverage_complete, about_coverage_complete, opening_hours_coverage_complete, photo_coverage_complete }`. |

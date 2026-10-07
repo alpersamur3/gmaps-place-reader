@@ -398,6 +398,9 @@ export async function readPhotos(page, { maxImages = 12, maxScrolls = 20, waitMs
   const found = opened ? await collectImages(page, { maxImages, maxScrolls, waitMs, exclude }) : overview;
   const images = new Map();
   for (const row of [...overview.images, ...found.images]) images.set(imageIdentity(row.url), row);
-  return { status: images.size ? 'found' : 'unavailable', images: [...images.values()].slice(0, bounded(maxImages, 12)),
-    coverage_complete: false, truncated: found.truncated };
+  const rows = [...images.values()].slice(0, bounded(maxImages, 12));
+  // Without the gallery only the few overview photos were seen; that is not the caller's limit stopping the list.
+  const short = !opened && rows.length < bounded(maxImages, 12);
+  return { status: rows.length ? 'found' : 'unavailable', images: rows, coverage_complete: false,
+    truncated: short ? false : found.truncated, ...(short ? { reason: 'PHOTO_GALLERY_NOT_OPENED' } : {}) };
 }

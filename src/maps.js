@@ -389,6 +389,7 @@ export async function readPlace(page, place, { maxImages = 12, maxMenuImages = 2
   // Menu items were read but the menu photo album could not be opened.
   if (menu.status === 'found' && !menu.images?.length && menu.reason && menu.reason !== 'NO_MENU_CATEGORY') warnings.push('MENU_PHOTOS_UNAVAILABLE');
   if (photos.status === 'unavailable') warnings.push('PHOTOS_UNAVAILABLE');
+  if (photos.reason) warnings.push(photos.reason);
   // A rating means the place has reviews even when a limited view hides their count.
   if (includeReviews && (reviews.status === 'unavailable' || (reviews.status === 'empty' && (details.review_count > 0 || details.rating > 0)))) warnings.push('REVIEWS_UNAVAILABLE');
   if (includeReviews && reviews.status === 'found' && reviews.sort_applied === false) warnings.push('REVIEW_SORT_NOT_APPLIED');

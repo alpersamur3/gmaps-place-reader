@@ -26,6 +26,7 @@ Every result says what it could and could not read. Check `status` and `view` fi
 | `PHOTO_GALLERY_NOT_EXPOSED`, `MENU_CATEGORY_NOT_EXPOSED`, `MENU_UNAVAILABLE` | Why the menu album was unavailable (gallery not offered, or offered without categories). |
 | `MENU_READ_FAILED`, `PHOTOS_READ_FAILED` | Reading the menu or the gallery threw an error (the gallery is retried once first). |
 | `PHOTOS_UNAVAILABLE` | No general photos were found. |
+| `PHOTO_GALLERY_NOT_OPENED` | The photo gallery did not open, so `photos` holds only the few photos shown on the place overview. Usually transient; read the place again. |
 | `REVIEWS_UNAVAILABLE` | Reviews were requested but none could be read, although the place has a rating. |
 | `REVIEW_SORT_NOT_APPLIED` | The requested `reviewSort` could not be selected; reviews are in `sort_label` order. |
 | `REVIEWS_LIMIT_OR_SCROLL_LIMIT`, `MENU_IMAGE_LIMIT_OR_SCROLL_LIMIT`, `PHOTO_IMAGE_LIMIT_OR_SCROLL_LIMIT` | Your own limits stopped a list. Not an error; raise `maxReviews` / `maxReviewScrolls`, `maxMenuImages`, `maxImages`. |

@@ -138,6 +138,15 @@ test('excluded menu photos do not use up the image limit', async () => {
   });
 });
 
+test('a gallery that did not open is reported, not shown as the image limit', async () => {
+  await mapsFixture(`<main role="main"><h1>Test Cafe</h1>${photo('hero', 400)}</main>`, async page => {
+    const photos = await readPhotos(page, { maxImages: 12, waitMs: 5, overviewUrl: PLACE });
+    assert.deepEqual(ids(photos.images), ['hero']);
+    assert.equal(photos.reason, 'PHOTO_GALLERY_NOT_OPENED');
+    assert.equal(photos.truncated, false);
+  });
+});
+
 test('global Maps Menu button is never mistaken for restaurant menu', async () => {
   await fixture(`<button aria-label="Menü" onclick="this.dataset.clicked='yes'">☰</button>
     <main role="main"><h1>Restaurant</h1><img src="https://lh3.googleusercontent.com/general=w200"></main>`, async page => {

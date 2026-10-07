@@ -21,7 +21,7 @@
 | `attributes` | Hakkında sekmesi: `[{ category, name, label, available }]`, ör. `{ category: 'Erişilebilirlik', name: 'Tekerlekli sandalyeye uygun giriş', available: false }`. |
 | `about_status`, `about_coverage_complete` | Hakkında sekmesinin tamamen okunup okunmadığı. |
 | `menu` | Aşağıya bakın. |
-| `photos` | `{ status, images: [{ url, width, height, label, category }], truncated }`: genel galeri fotoğrafları, menü fotoğrafları hariç. |
+| `photos` | `{ status, images: [{ url, width, height, label, category }], truncated, reason? }`: genel galeri fotoğrafları, menü fotoğrafları hariç. Yalnız genel bakıştaki fotoğraflar okunabildiyse `reason: 'PHOTO_GALLERY_NOT_OPENED'`. |
 | `reviews` | Yalnız `includeReviews: true` ile. Aşağıya bakın. |
 | `warnings` | `LIMITED_VIEW`, `MENU_PHOTOS_UNAVAILABLE`, `REVIEWS_LIMIT_OR_SCROLL_LIMIT` gibi kodlar (bkz. [Sorun giderme](troubleshooting.md)). |
 | `data_quality` | `{ partial, review_count_observed, menu_coverage_complete, review_coverage_complete, about_coverage_complete, opening_hours_coverage_complete, photo_coverage_complete }`. |

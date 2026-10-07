@@ -26,6 +26,7 @@ Her sonuç neyi okuyabildiğini ve neyi okuyamadığını söyler. Önce `status
 | `PHOTO_GALLERY_NOT_EXPOSED`, `MENU_CATEGORY_NOT_EXPOSED`, `MENU_UNAVAILABLE` | Menü albümünün neden alınamadığı (galeri sunulmadı ya da kategorisiz sunuldu). |
 | `MENU_READ_FAILED`, `PHOTOS_READ_FAILED` | Menü ya da galeri okunurken hata oluştu (galeri önce bir kez yeniden denenir). |
 | `PHOTOS_UNAVAILABLE` | Genel fotoğraf bulunamadı. |
+| `PHOTO_GALLERY_NOT_OPENED` | Fotoğraf galerisi açılamadı; `photos` yalnız mekânın genel bakışında görünen birkaç fotoğrafı içerir. Çoğunlukla geçicidir; mekânı yeniden okuyun. |
 | `REVIEWS_UNAVAILABLE` | Yorum istendi ama mekânın puanı olduğu hâlde hiç yorum okunamadı. |
 | `REVIEW_SORT_NOT_APPLIED` | İstenen `reviewSort` seçilemedi; yorumlar `sort_label` sırasındadır. |
 | `REVIEWS_LIMIT_OR_SCROLL_LIMIT`, `MENU_IMAGE_LIMIT_OR_SCROLL_LIMIT`, `PHOTO_IMAGE_LIMIT_OR_SCROLL_LIMIT` | Sizin sınırınız bir listeyi durdurdu. Hata değildir; `maxReviews` / `maxReviewScrolls`, `maxMenuImages`, `maxImages` değerlerini artırın. |
