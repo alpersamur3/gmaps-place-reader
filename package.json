@@ -1,7 +1,7 @@
 {
   "name": "gmaps-place-reader",
   "version": "0.3.1",
-  "description": "Read Google Maps places by URL: business details, menu items and photos, galleries, and dated reviews with Puppeteer.",
+  "description": "Read Google Maps places by URL: business details, menu items and photos, galleries, and dated reviews with Puppeteer. Includes an MCP server for AI agents.",
   "keywords": [
     "google-maps",
     "maps",
@@ -12,7 +12,10 @@
     "puppeteer",
     "headless-chrome",
     "photos",
-    "reviews"
+    "reviews",
+    "mcp",
+    "mcp-server",
+    "ai-agents"
   ],
   "license": "MIT",
   "author": "Alper Samur",
@@ -31,12 +34,14 @@
     "./media": "./src/media.js",
     "./details": "./src/details.js",
     "./reviews": "./src/reviews.js",
+    "./mcp": "./src/mcp.js",
     "./package.json": "./package.json"
   },
   "bin": {
     "gmaps-scan": "bin/scan.js",
     "gmaps-place": "bin/place.js",
-    "gmaps-view": "bin/view.js"
+    "gmaps-view": "bin/view.js",
+    "gmaps-mcp": "bin/mcp.js"
   },
   "files": [
     "src",
@@ -50,7 +55,8 @@
   "scripts": {
     "test": "node --test",
     "scan": "node bin/scan.js",
-    "view": "node bin/view.js"
+    "view": "node bin/view.js",
+    "mcp": "node bin/mcp.js"
   },
   "dependencies": {
     "puppeteer-core": "^24.0.0"
