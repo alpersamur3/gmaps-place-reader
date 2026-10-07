@@ -1,7 +1,7 @@
 import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { launchBrowser, toObservation } from '../src/maps.js';
-import { collectImages, imageIdentity, readMenu, readMenuPhotos, viewerPhoto, photoMonth } from '../src/media.js';
+import { collectImages, imageIdentity, readMenu, readMenuPhotos, readPhotos, viewerPhoto, photoMonth } from '../src/media.js';
 let browser;
 before(async () => { browser = await launchBrowser(); });
 after(async () => { await browser?.close(); });
@@ -106,6 +106,27 @@ test('virtualized gallery accumulates earlier photos and waits for delayed scrol
     assert.equal(result.images.length, 2, JSON.stringify({ result, dom: await page.$eval('[role=main]', el => ({ top:el.scrollTop, height:el.scrollHeight, client:el.clientHeight, src:el.querySelector('img').src })) }));
     assert.ok(result.images.some(row => row.url.includes('/first=')));
     assert.ok(result.images.some(row => row.url.includes('/second=')));
+  });
+});
+
+const photo = (id, size = 100) => `<img style="width:${size}px;height:${size}px" src="https://lh3.googleusercontent.com/gps-cs-s/${id}=w${size}-h${size}">`;
+const ids = rows => rows.map(row => row.url.match(/\/gps-cs-s\/(\w+)=/)?.[1]);
+
+// Live Maps: the menu album's viewer stayed open behind a clickable Overview tab and its thumbnails were read as
+// the gallery (11 menu photos and a 32 px preview), so after removing the menu photos one general photo was left.
+test('general photos come from a reloaded place, never from a menu album viewer left open', async () => {
+  const html = `<main role="main"><h1>Test Cafe</h1>
+    <div role="tablist"><button role="tab">Genel Bakış</button><button role="tab">Hakkında</button></div>
+    <button aria-label="Fotoğrafları göster" onclick="document.querySelector('#gallery').hidden = false">photos</button>
+    <div id="gallery" hidden>${['g1', 'g2', 'g3'].map(id => photo(id)).join('')}</div></main>`;
+  await mapsFixture(html, async (page, loads) => {
+    const menu = ['m1', 'm2', 'm3', 'm4'].map(id => `https://lh3.googleusercontent.com/gps-cs-s/${id}=w112-h112`);
+    await page.evaluate(urls => document.body.insertAdjacentHTML('afterbegin',
+      `<div role="dialog">${urls.map(url => `<img style="width:112px;height:112px" src="${url}">`).join('')}</div>`), menu);
+    const before = loads();
+    const photos = await readPhotos(page, { maxImages: 3, maxScrolls: 2, waitMs: 5, overviewUrl: PLACE, exclude: menu });
+    assert.equal(loads(), before + 1);
+    assert.deepEqual(ids(photos.images), ['g1', 'g2', 'g3']);
   });
 });
 

@@ -386,8 +386,10 @@ export async function readMenu(page, { maxCategories = 50, maxImages = 20, maxSc
 }
 
 export async function readPhotos(page, { maxImages = 12, maxScrolls = 20, waitMs = 450, overviewUrl = '', exclude = [] } = {}) {
-  // Returning to the canonical place avoids treating the menu album as general photos.
-  if (!await clickControl(page, 'overview') && overviewUrl) await openOverview(page, overviewUrl);
+  // Start from a freshly loaded place: the menu album's viewer can stay open behind a clickable Overview tab,
+  // and its thumbnails would be read as the gallery (seen live: 11 menu photos and a 32 px preview).
+  if (overviewUrl) await openOverview(page, overviewUrl);
+  else await clickControl(page, 'overview');
   const overview = await collectImages(page, { maxImages, maxScrolls: 1, waitMs });
   const opened = await clickControl(page, 'photos');
   if (opened) await clickControl(page, 'allPhotos');
