@@ -117,6 +117,29 @@ test('place links: country domains, ?cid= and short links are accepted; other ho
   assert.equal(normalizePlaceUrl('http://www.google.com/maps/place/x'), '');
 });
 
+test('readPlace can skip the menu and the gallery (e.g. when only reviews are wanted)', async () => {
+  const { readPlace } = await import('../src/maps.js');
+  const browser = await launchBrowser();
+  try {
+    const page = await browser.newPage();
+    await page.setRequestInterception(true);
+    page.on('request', request => request.isNavigationRequest() && request.url().startsWith('https://www.google.com/maps/')
+      ? request.respond({ status: 200, contentType: 'text/html; charset=utf-8', body: `<main role="main"><h1>Test Cafe</h1>
+          <button data-item-id="address" aria-label="Adres: Sokak 1">Sokak 1</button>
+          <div role="tablist"><button role="tab" aria-selected="true">Genel Bakış</button>
+            <button role="tab" onclick="document.body.dataset.opened = 'menu'">Menü</button><button role="tab">Hakkında</button></div>
+          <button aria-label="Fotoğrafları göster" onclick="document.body.dataset.opened = 'photos'">photos</button></main>` })
+      : request.abort());
+    const place = await readPlace(page, { google_maps_url: 'https://www.google.com/maps/place/Test/data=!4m2!3m1!1s0x1:0x2' },
+      { includeMenu: false, includePhotos: false, recoverView: false });
+    assert.equal(place.name, 'Test Cafe');
+    assert.equal(await page.evaluate(() => document.body.dataset.opened), undefined);
+    assert.equal(place.menu.status, 'not_requested');
+    assert.equal(place.photos.status, 'not_requested');
+    assert.deepEqual(place.warnings.filter(code => /MENU|PHOTO/.test(code)), []);
+  } finally { await browser.close(); }
+});
+
 test('limited view: reload once, then bring in a full-view anonymous id once per browser', async () => {
   const { nextViewStep } = await import('../src/maps.js');
   assert.equal(nextViewStep({ status: 'ok' }), 'stop');

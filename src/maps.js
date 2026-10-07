@@ -340,7 +340,7 @@ export async function checkView(browser, url = VIEW_CHECK_PLACE) {
   } finally { await page.close(); }
 }
 
-export async function readPlace(page, place, { maxImages = 12, maxMenuImages = 20, maxScrolls = 20,
+export async function readPlace(page, place, { maxImages = 12, maxMenuImages = 20, maxScrolls = 20, includeMenu = true, includePhotos = true,
   includeReviews = false, maxReviews = 100, maxReviewScrolls = 25, reviewSort = 'relevant', recoverView = true, onProgress } = {}) {
   const target = normalizePlaceUrl(place?.google_maps_url || place?.url);
   if (!target) throw new Error('INVALID_MAPS_URL');
@@ -366,15 +366,19 @@ export async function readPlace(page, place, { maxImages = 12, maxMenuImages = 2
   const warnings = [];
   if (status !== 'ok') warnings.push(status.toUpperCase());
   let menu, photos, reviews;
-  try { menu = await readMenu(page, { maxImages: maxMenuImages, maxScrolls, overviewUrl: canonical, onProgress }); }
+  // Skipped parts (includeMenu / includePhotos false) say so and raise no warnings.
+  const notRequested = () => ({ status: 'not_requested', images: [], categories: [], items: [], coverage_complete: false });
+  if (!includeMenu) menu = notRequested();
+  else try { menu = await readMenu(page, { maxImages: maxMenuImages, maxScrolls, overviewUrl: canonical, onProgress }); }
   catch { menu = { status: 'unavailable', images: [], categories: [], coverage_complete: false }; warnings.push('MENU_READ_FAILED'); }
   // A limited view shows only part of the menu album (often a single photo), so it is never complete.
   if (status !== 'ok') menu.coverage_complete = false;
   // A navigation during the gallery read (rare) destroys the page context; one more try from the overview.
-  for (let attempt = 0; attempt < 2 && !photos; attempt++) {
+  for (let attempt = 0; includePhotos && attempt < 2 && !photos; attempt++) {
     try { photos = await readPhotos(page, { maxImages, maxScrolls, overviewUrl: canonical, exclude: (menu.images || []).map(row => row.url) }); }
     catch { if (attempt) { photos = { status: 'unavailable', images: [], coverage_complete: false }; warnings.push('PHOTOS_READ_FAILED'); } }
   }
+  photos ??= notRequested();
   if (includeReviews) {
     try { reviews = await readReviews(page, { overviewUrl: canonical, reviewCount: details.review_count,
       maxReviews, maxScrolls: maxReviewScrolls, sort: reviewSort, onProgress }); }

@@ -21,7 +21,7 @@ What `readPlace` / `readPlaceUrl` return, and the flat record `toObservation` / 
 | `attributes` | About tab: `[{ category, name, label, available }]`, e.g. `{ category: 'Erişilebilirlik', name: 'Tekerlekli sandalyeye uygun giriş', available: false }`. |
 | `about_status`, `about_coverage_complete` | Whether the About tab was read completely. |
 | `menu` | See below. |
-| `photos` | `{ status, images: [{ url, width, height, label, category }], truncated, reason? }`: general gallery photos, menu photos excluded. `reason: 'PHOTO_GALLERY_NOT_OPENED'` when only the overview's photos could be read. |
+| `photos` | `{ status, images: [{ url, width, height, label, category }], truncated, reason? }`: general gallery photos, menu photos excluded. `reason: 'PHOTO_GALLERY_NOT_OPENED'` when only the overview's photos could be read; `status: 'not_requested'` with `includePhotos: false`. |
 | `reviews` | Only with `includeReviews: true`. See below. |
 | `warnings` | Codes such as `LIMITED_VIEW`, `MENU_PHOTOS_UNAVAILABLE`, `REVIEWS_LIMIT_OR_SCROLL_LIMIT` (see [Troubleshooting](troubleshooting.md)). |
 | `data_quality` | `{ partial, review_count_observed, menu_coverage_complete, review_coverage_complete, about_coverage_complete, opening_hours_coverage_complete, photo_coverage_complete }`. |
@@ -30,7 +30,7 @@ What `readPlace` / `readPlaceUrl` return, and the flat record `toObservation` / 
 
 | Field | Meaning |
 |---|---|
-| `status` | `found` · `empty` (no menu photos, `reason: 'NO_MENU_CATEGORY'`, or photos did not load) · `unavailable` (with `reason`). |
+| `status` | `found` · `empty` (no menu photos, `reason: 'NO_MENU_CATEGORY'`, or photos did not load) · `unavailable` (with `reason`) · `not_requested` (`includeMenu: false`). |
 | `source` | `menu_tab` (album opened from the Menu tab strip) · `photo_viewer` (from the gallery's Menu category) · `none`. |
 | `images` | Menu album photos: `{ url, width, height, label, taken_at, category, categories }`. `width`/`height` are the original size. `taken_at` is the month the photo was taken (`2026-01`; the posting month when Maps shows no capture date). Use it to prefer the newest menu. |
 | `expected_images` | The count shown on the Menu strip ("Fotoğraf 1/12"); the album itself can be larger. |

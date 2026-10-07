@@ -29,6 +29,8 @@ ESM only: `import { … } from 'gmaps-place-reader'`. Subpath exports: `gmaps-pl
 | `maxMenuImages` | 20 | Menu album photos (1–200). |
 | `maxImages` | 12 | General photos (1–200). |
 | `maxScrolls` | 20 | Scroll steps for menu categories and the gallery. |
+| `includeMenu` | `true` | Read the menu (Menu tab and menu album). `false` skips it: `menu.status` is `not_requested`. |
+| `includePhotos` | `true` | Read the general gallery. `false` skips it: `photos.status` is `not_requested`. |
 | `includeReviews` | `false` | Read reviews. |
 | `maxReviews` | 100 | Up to 10,000. |
 | `maxReviewScrolls` | 25 | Up to 1,000; each step loads about 10 reviews. |

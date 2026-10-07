@@ -21,7 +21,7 @@
 | `attributes` | Hakkında sekmesi: `[{ category, name, label, available }]`, ör. `{ category: 'Erişilebilirlik', name: 'Tekerlekli sandalyeye uygun giriş', available: false }`. |
 | `about_status`, `about_coverage_complete` | Hakkında sekmesinin tamamen okunup okunmadığı. |
 | `menu` | Aşağıya bakın. |
-| `photos` | `{ status, images: [{ url, width, height, label, category }], truncated, reason? }`: genel galeri fotoğrafları, menü fotoğrafları hariç. Yalnız genel bakıştaki fotoğraflar okunabildiyse `reason: 'PHOTO_GALLERY_NOT_OPENED'`. |
+| `photos` | `{ status, images: [{ url, width, height, label, category }], truncated, reason? }`: genel galeri fotoğrafları, menü fotoğrafları hariç. Yalnız genel bakıştaki fotoğraflar okunabildiyse `reason: 'PHOTO_GALLERY_NOT_OPENED'`; `includePhotos: false` ise `status: 'not_requested'`. |
 | `reviews` | Yalnız `includeReviews: true` ile. Aşağıya bakın. |
 | `warnings` | `LIMITED_VIEW`, `MENU_PHOTOS_UNAVAILABLE`, `REVIEWS_LIMIT_OR_SCROLL_LIMIT` gibi kodlar (bkz. [Sorun giderme](troubleshooting.md)). |
 | `data_quality` | `{ partial, review_count_observed, menu_coverage_complete, review_coverage_complete, about_coverage_complete, opening_hours_coverage_complete, photo_coverage_complete }`. |
@@ -30,7 +30,7 @@
 
 | Alan | Anlamı |
 |---|---|
-| `status` | `found` · `empty` (menü fotoğrafı yok, `reason: 'NO_MENU_CATEGORY'`; ya da fotoğraflar yüklenmedi) · `unavailable` (`reason` ile). |
+| `status` | `found` · `empty` (menü fotoğrafı yok, `reason: 'NO_MENU_CATEGORY'`; ya da fotoğraflar yüklenmedi) · `unavailable` (`reason` ile) · `not_requested` (`includeMenu: false`). |
 | `source` | `menu_tab` (albüm Menü sekmesindeki şeritten açıldı) · `photo_viewer` (galerinin Menü kategorisinden) · `none`. |
 | `images` | Menü albümü fotoğrafları: `{ url, width, height, label, taken_at, category, categories }`. `width`/`height` özgün boyuttur. `taken_at` fotoğrafın çekildiği aydır (`2026-01`; Maps çekim tarihi göstermiyorsa paylaşım ayı). En güncel menüyü seçmek için kullanın. |
 | `expected_images` | Menü şeridinde yazan sayı ("Fotoğraf 1/12"); albümün kendisi daha büyük olabilir. |

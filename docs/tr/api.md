@@ -29,6 +29,8 @@ Yalnız ESM: `import { … } from 'gmaps-place-reader'`. Alt yol dışa aktarım
 | `maxMenuImages` | 20 | Menü albümü fotoğrafları (1–200). |
 | `maxImages` | 12 | Genel fotoğraflar (1–200). |
 | `maxScrolls` | 20 | Menü kategorileri ve galeri için kaydırma adımı. |
+| `includeMenu` | `true` | Menüyü oku (Menü sekmesi ve menü albümü). `false` atlar: `menu.status` `not_requested` olur. |
+| `includePhotos` | `true` | Genel galeriyi oku. `false` atlar: `photos.status` `not_requested` olur. |
 | `includeReviews` | `false` | Yorumları oku. |
 | `maxReviews` | 100 | En fazla 10.000. |
 | `maxReviewScrolls` | 25 | En fazla 1.000; her adım yaklaşık 10 yorum yükler. |
