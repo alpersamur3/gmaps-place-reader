@@ -1,6 +1,6 @@
 {
   "name": "gmaps-place-reader",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Read Google Maps places by URL: business details, menu items and photos, galleries, and dated reviews with Puppeteer.",
   "keywords": [
     "google-maps",
