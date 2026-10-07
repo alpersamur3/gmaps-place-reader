@@ -82,9 +82,11 @@ async function clickControl(page, kind, wanted = '') {
   } finally { await handle.dispose(); }
 }
 
-export async function collectImages(page, { category = 'general', maxImages = 20, maxScrolls = 20, waitMs = 450, menuOnly = false } = {}) {
+export async function collectImages(page, { category = 'general', maxImages = 20, maxScrolls = 20, waitMs = 450, menuOnly = false, exclude = [] } = {}) {
   maxImages = bounded(maxImages, 20);
   maxScrolls = bounded(maxScrolls, 20, 100);
+  // Skipped while collecting (e.g. menu photos in the gallery), so they never use up maxImages.
+  const skip = new Set(exclude.map(imageIdentity));
   const images = new Map(), items = new Map();
   let expectedImages = 0;
   let stable = 0, exhausted = false, limitReached = false;
@@ -129,7 +131,7 @@ export async function collectImages(page, { category = 'general', maxImages = 20
     for (const row of raw.items) items.set(JSON.stringify([category, row.name, row.description, row.price_text]), { ...row, category });
     for (const item of raw.images) {
       const url = imageUrl(item.url), id = imageIdentity(url);
-      if (!id) continue;
+      if (!id || skip.has(id)) continue;
       const existing = images.get(id);
       const row = { ...item, url, category };
       if (!existing || row.width * row.height > existing.width * existing.height) images.set(id, row);
@@ -390,16 +392,12 @@ export async function readPhotos(page, { maxImages = 12, maxScrolls = 20, waitMs
   // and its thumbnails would be read as the gallery (seen live: 11 menu photos and a 32 px preview).
   if (overviewUrl) await openOverview(page, overviewUrl);
   else await clickControl(page, 'overview');
-  const overview = await collectImages(page, { maxImages, maxScrolls: 1, waitMs });
+  const overview = await collectImages(page, { maxImages, maxScrolls: 1, waitMs, exclude });
   const opened = await clickControl(page, 'photos');
   if (opened) await clickControl(page, 'allPhotos');
-  const found = opened ? await collectImages(page, { maxImages, maxScrolls, waitMs }) : overview;
-  const excluded = new Set(exclude.map(imageIdentity));
+  const found = opened ? await collectImages(page, { maxImages, maxScrolls, waitMs, exclude }) : overview;
   const images = new Map();
-  for (const row of [...overview.images, ...found.images]) {
-    const id = imageIdentity(row.url);
-    if (!excluded.has(id)) images.set(id, row);
-  }
+  for (const row of [...overview.images, ...found.images]) images.set(imageIdentity(row.url), row);
   return { status: images.size ? 'found' : 'unavailable', images: [...images.values()].slice(0, bounded(maxImages, 12)),
     coverage_complete: false, truncated: found.truncated };
 }

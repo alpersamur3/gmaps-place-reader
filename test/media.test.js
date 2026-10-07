@@ -130,6 +130,14 @@ test('general photos come from a reloaded place, never from a menu album viewer 
   });
 });
 
+test('excluded menu photos do not use up the image limit', async () => {
+  await fixture(`<main role="main">${['m1', 'm2', 'm3', 'g1', 'g2'].map(id => photo(id)).join('')}</main>`, async page => {
+    const exclude = ['m1', 'm2', 'm3'].map(id => `https://lh3.googleusercontent.com/gps-cs-s/${id}=w1200`);
+    const result = await collectImages(page, { maxImages: 2, waitMs: 5, exclude });
+    assert.deepEqual(ids(result.images), ['g1', 'g2']);
+  });
+});
+
 test('global Maps Menu button is never mistaken for restaurant menu', async () => {
   await fixture(`<button aria-label="Menü" onclick="this.dataset.clicked='yes'">☰</button>
     <main role="main"><h1>Restaurant</h1><img src="https://lh3.googleusercontent.com/general=w200"></main>`, async page => {
