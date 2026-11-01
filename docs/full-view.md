@@ -70,7 +70,7 @@ The reader never signs in and loads no cookies. A Google account would add nothi
 
 ### Every result says which view it got
 
-- `readPlace` / `readPlaceUrl`: `view` (`full` · `limited` · `unknown`), `view_renewed` (how many ids were brought in for this place), `status`, `warnings` and `data_quality`.
+- `readPlace` / `readPlaceUrl`: `view` (`full` · `limited` · `unknown`: consent, sign-in or block page, or a place panel that did not load), `view_renewed` (how many ids were brought in for this place), `status`, `warnings` and `data_quality`.
 - `scan` items and `toObservation`: `view`, `warnings`, `source_error`.
 - `gmaps-place`: `view` at the top level and in `place`.
 

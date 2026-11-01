@@ -9,7 +9,7 @@
 | Alan | Anlamı |
 |---|---|
 | `status` | `ok` · `incomplete` (bazı kısımlar okunamadı, `warnings`'e bakın) · `limited_view` · `consent_required` · `auth_required` · `blocked` · `unavailable`. |
-| `view`, `view_renewed` | `full` · `limited` · `unknown` ve bu mekân için kaç anonim kimlik getirildiği ([Tam görünüm](full-view.md)). |
+| `view`, `view_renewed` | `full` · `limited` · `unknown` (onay, oturum açma ya da engel sayfası veya yüklenmeyen mekân paneli) ve bu mekân için kaç anonim kimlik getirildiği ([Tam görünüm](full-view.md)). |
 | `source_id` | Kalıcı kimlik: özellik kimliği (`0x…:0x…`), yoksa `cid:…` ya da `place:…`. |
 | `google_maps_url` | Okunan kanonik link (her zaman `hl=tr` ile). |
 | `name`, `address`, `phone`, `website`, `menu_url` | Maps'in gösterdiği işletme bilgileri. |

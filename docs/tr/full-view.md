@@ -70,7 +70,7 @@ Okuyucu hiçbir zaman oturum açmaz ve çerez yüklemez. Google hesabı bir şey
 
 ### Her sonuç hangi görünümü aldığını söyler
 
-- `readPlace` / `readPlaceUrl`: `view` (`full` · `limited` · `unknown`), `view_renewed` (bu mekân için kaç kimlik getirildi), `status`, `warnings` ve `data_quality`.
+- `readPlace` / `readPlaceUrl`: `view` (`full` · `limited` · `unknown`: onay, oturum açma ya da engel sayfası veya yüklenmeyen mekân paneli), `view_renewed` (bu mekân için kaç kimlik getirildi), `status`, `warnings` ve `data_quality`.
 - `scan` kayıtları ve `toObservation`: `view`, `warnings`, `source_error`.
 - `gmaps-place`: hem en üst düzeyde hem `place` içinde `view`.
 

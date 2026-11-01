@@ -321,6 +321,15 @@ async function recoverFullView(page, target, status) {
   return { status, renewed };
 }
 
+/**
+ * The view a place page was served in: 'full', 'limited' or 'unknown' (consent, sign-in or block pages). A page whose
+ * place panel stayed empty shows no limited-view notice either, so it only counts as 'full' once the panel was read.
+ */
+export function placeView(status, panelRead = true) {
+  if (status === 'limited_view') return 'limited';
+  return status === 'ok' && panelRead ? 'full' : 'unknown';
+}
+
 /** A well-known place whose page shows Google's limited-view notice when the browser only gets that view. */
 export const VIEW_CHECK_PLACE = 'https://www.google.com/maps?cid=10222232094831998944';
 
@@ -336,6 +345,7 @@ export async function checkView(browser, url = VIEW_CHECK_PLACE) {
     await navigatePlace(page, target);
     let status = await pageStatus(page), renewed = 0;
     if (status === 'limited_view') ({ status, renewed } = await recoverFullView(page, target, status));
+    if (status === 'ok' && !(await page.evaluate(PANEL_READY).catch(() => false))) status = 'unavailable';
     return { view: status === 'ok' ? 'full' : status === 'limited_view' ? 'limited' : status, renewed };
   } finally { await page.close(); }
 }
@@ -348,13 +358,13 @@ export async function readPlace(page, place, { maxImages = 12, maxMenuImages = 2
   let status = await pageStatus(page);
   let renewed = 0;
   if (status === 'limited_view' && recoverView) ({ status, renewed } = await recoverFullView(page, target, status));
-  // Which view Google served this place in: 'full', 'limited' or 'unknown' (consent, sign-in or block pages).
-  const view = { view: status === 'ok' ? 'full' : status === 'limited_view' ? 'limited' : 'unknown', view_renewed: renewed };
+  // Which view Google served this place in (see placeView).
+  const view = panelRead => ({ view: placeView(status, panelRead), view_renewed: renewed });
   const canonical = safeMapsUrl(page.url()) || target;
   const identity = placeIdentity(canonical) || placeIdentity(target);
-  if (!['ok', 'limited_view'].includes(status)) return { status, ...view, source_id: identity, google_maps_url: canonical };
+  if (!['ok', 'limited_view'].includes(status)) return { status, ...view(false), source_id: identity, google_maps_url: canonical };
   const details = await extractPlaceDetails(page);
-  if (details.data_status !== 'ok') return { status: 'unavailable', ...view, source_id: identity, google_maps_url: canonical };
+  if (details.data_status !== 'ok') return { status: 'unavailable', ...view(false), source_id: identity, google_maps_url: canonical };
   try {
     const about = await extractAboutDetails(page);
     details.description ||= about.description;
@@ -402,7 +412,7 @@ export async function readPlace(page, place, { maxImages = 12, maxMenuImages = 2
   if (photos.truncated) warnings.push('PHOTO_IMAGE_LIMIT_OR_SCROLL_LIMIT');
   // Hitting our own image limits is not a source failure; the warnings still record it.
   const finalStatus = status !== 'ok' ? status : warnings.some(code => !code.endsWith('_LIMIT_OR_SCROLL_LIMIT')) ? 'incomplete' : 'ok';
-  return { status: finalStatus, ...view, source_id: identity, google_maps_url: canonical, ...details, menu, photos,
+  return { status: finalStatus, ...view(true), source_id: identity, google_maps_url: canonical, ...details, menu, photos,
     ...(includeReviews ? { reviews } : {}),
     warnings: [...new Set(warnings)], data_quality: { partial: finalStatus !== 'ok',
       review_count_observed: !!details.review_label, menu_coverage_complete: !!menu.coverage_complete,

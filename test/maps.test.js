@@ -150,3 +150,11 @@ test('limited view: reload once, then bring in a full-view anonymous id once per
   // A browser that could not leave the limited view does not retry on every place.
   assert.equal(nextViewStep({ status: 'limited_view', sticky: true }), 'stop');
 });
+
+test('an empty place panel is not reported as the full view', async () => {
+  const { placeView } = await import('../src/maps.js');
+  assert.equal(placeView('ok'), 'full');
+  assert.equal(placeView('ok', false), 'unknown', 'no notice and no panel: the view cannot be told');
+  assert.equal(placeView('limited_view', false), 'limited');
+  assert.equal(placeView('blocked'), 'unknown');
+});
