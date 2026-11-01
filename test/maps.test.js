@@ -137,6 +137,8 @@ test('readPlace can skip the menu and the gallery (e.g. when only reviews are wa
     assert.equal(place.menu.status, 'not_requested');
     assert.equal(place.photos.status, 'not_requested');
     assert.deepEqual(place.warnings.filter(code => /MENU|PHOTO/.test(code)), []);
+    assert.equal(place.view, 'full');
+    assert.equal(place.account, 'unknown', 'the fixture page has neither an account nor a Sign in button');
   } finally { await browser.close(); }
 });
 
@@ -149,6 +151,28 @@ test('limited view: reload once, then bring in a full-view anonymous id once per
   assert.equal(nextViewStep({ status: 'limited_view', reloaded: true, renewals: 1 }), 'stop');
   // A browser that could not leave the limited view does not retry on every place.
   assert.equal(nextViewStep({ status: 'limited_view', sticky: true }), 'stop');
+  // A signed-in profile gets its view from the account: its cookies are never replaced.
+  assert.equal(nextViewStep({ status: 'limited_view', signedIn: true }), 'stop');
+  assert.equal(nextViewStep({ status: 'limited_view', signedIn: true, reloaded: true }), 'stop');
+});
+
+test('account state is read from the Maps page buttons only', async () => {
+  const { accountState } = await import('../src/maps.js');
+  const browser = await launchBrowser();
+  try {
+    const page = await browser.newPage();
+    const cases = [
+      ['<a aria-label="Google Hesabı: Ad Soyad (kisi@example.com)" href="https://accounts.google.com/"></a><h1>Test</h1>', 'signed_in'],
+      ['<a aria-label="Google Account: Name (name@example.com)"></a>', 'signed_in'],
+      ['<h1>Test</h1><a href="https://accounts.google.com/ServiceLogin">Oturum açın</a>', 'signed_out'],
+      ['<h1>Test</h1><button>Sign in</button>', 'signed_out'],
+      ['<h1>Google’a devam etmeden önce</h1><button>Tümünü reddet</button>', 'unknown'],
+    ];
+    for (const [html, expected] of cases) {
+      await page.setContent(html);
+      assert.equal(await accountState(page), expected, html);
+    }
+  } finally { await browser.close(); }
 });
 
 test('an empty place panel is not reported as the full view', async () => {

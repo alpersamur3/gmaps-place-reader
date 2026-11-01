@@ -13,7 +13,7 @@ export const PHOTO_SIDE = 1280;
 export const PHOTOS_PER_CALL = 8;
 const PHOTO_BYTES = 5 * 1024 * 1024;
 
-const INSTRUCTIONS = 'Reads public Google Maps pages with a local Chrome; no API key or Google account. '
+const INSTRUCTIONS = 'Reads public Google Maps pages with a local Chrome; no API key. '
   + 'Use search to find place links, place for details, the written menu and photo URLs, reviews for reviews, '
   + 'and photos to look at photo URLs (e.g. menu pages). A place read takes 30-90 s and reads run one at a time, '
   + 'so do not read the same place twice. Results say what could not be read: check status, view and warnings.';

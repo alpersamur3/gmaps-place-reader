@@ -237,17 +237,38 @@ async function navigatePlace(page, target) {
   await sleep(500);
 }
 
+// The Maps header: the account button when signed in ("Google Hesabı: Ad Soyad (…)" / "Google Account: …"; no \b,
+// which sees no boundary after "ı"), the Sign in link otherwise. Serialized by Puppeteer: self-contained.
+const ACCOUNT_STATE = `(() => {
+  const labels = [...document.querySelectorAll('a[aria-label], button[aria-label]')].map(el => el.getAttribute('aria-label') || '');
+  if (labels.some(label => /^(?:google hesabı|google account)(?:\\s*:|\\s|$)/i.test(label))) return 'signed_in';
+  if ([...document.querySelectorAll('a, button')].some(el => /^(?:oturum açın|oturum aç|sign in)$/i.test((el.innerText || '').trim()))) return 'signed_out';
+  return 'unknown';
+})()`;
+
+/**
+ * Whether Google shows this browser as signed in on the current Maps page: 'signed_in' (the account button is
+ * there), 'signed_out' (the Sign in link is there) or 'unknown' (neither, e.g. a consent or block page). The header
+ * renders after the place panel, so up to `waitMs` is allowed for it. Only the page's own buttons are looked at; no
+ * account data is read.
+ */
+export async function accountState(page, { waitMs = 4000 } = {}) {
+  await page.waitForFunction(`${ACCOUNT_STATE} !== 'unknown'`, { timeout: waitMs }).catch(() => {});
+  return page.evaluate(ACCOUNT_STATE).catch(() => 'unknown');
+}
+
 /**
  * Google serves anonymous browsers the limited or the full view by the browser's anonymous id cookie: __Secure-ENID
  * in the EU consent region, NID elsewhere. Each id is issued in one class and keeps it (ENID about 13 months, NID
- * about 6); a Google account does not change it. A full-view id works in any profile and from any IP address, as long
- * as the user agent names the operating system it was issued for. A profile tends to receive new ids of its first
- * class, so it cannot fix itself by dropping the cookie; a fresh profile gets a full one about every second time.
+ * about 6). A full-view id works in any profile and from any IP address, as long as the user agent names the
+ * operating system it was issued for. A profile tends to receive new ids of its first class, so it cannot fix itself
+ * by dropping the cookie; a fresh profile used to get a full one about every second time, and since late October
+ * 2026 none does. A signed-in profile gets the full view from its account, so its cookies are left alone.
  * Next step for a limited page: 'reload' (a just-issued id only works from the next request on), 'renew' (bring in
  * a full-view id from a fresh temporary profile) or 'stop'.
  */
-export function nextViewStep({ status, reloaded = false, renewals = 0, maxRenewals = 1, sticky = false }) {
-  if (status !== 'limited_view' || sticky) return 'stop';
+export function nextViewStep({ status, signedIn = false, reloaded = false, renewals = 0, maxRenewals = 1, sticky = false }) {
+  if (status !== 'limited_view' || signedIn || sticky) return 'stop';
   if (!reloaded) return 'reload';
   return renewals < maxRenewals ? 'renew' : 'stop';
 }
@@ -297,7 +318,8 @@ async function recoverFullView(page, target, status) {
   const state = browser.mapsView ||= { renewals: 0, sticky: false };
   let reloaded = false, renewed = 0;
   for (;;) {
-    const step = nextViewStep({ status, reloaded, renewals: state.renewals, sticky: state.sticky });
+    const step = nextViewStep({ status, signedIn: await accountState(page) === 'signed_in', reloaded,
+      renewals: state.renewals, sticky: state.sticky });
     if (step === 'stop') break;
     if (step === 'renew') {
       state.renewals++;
@@ -335,18 +357,20 @@ export const VIEW_CHECK_PLACE = 'https://www.google.com/maps?cid=102222320948319
 
 /**
  * Opens one place and reports whether this browser gets the full view: { view: 'full' | 'limited' | <status>,
- * renewed }. A limited ENID is renewed on the way (see recoverFullView), so a periodic check also repairs it.
+ * renewed, account }. A limited anonymous id is renewed on the way (see recoverFullView) unless `repair` is false,
+ * so a periodic check also repairs it; `account` says whether the profile is signed in (see accountState).
  */
-export async function checkView(browser, url = VIEW_CHECK_PLACE) {
+export async function checkView(browser, url = VIEW_CHECK_PLACE, { repair = true } = {}) {
   const target = normalizePlaceUrl(url);
   if (!target) throw new Error('INVALID_MAPS_URL');
   const page = await newMapsPage(browser);
   try {
     await navigatePlace(page, target);
     let status = await pageStatus(page), renewed = 0;
-    if (status === 'limited_view') ({ status, renewed } = await recoverFullView(page, target, status));
+    if (status === 'limited_view' && repair) ({ status, renewed } = await recoverFullView(page, target, status));
+    const account = await accountState(page);
     if (status === 'ok' && !(await page.evaluate(PANEL_READY).catch(() => false))) status = 'unavailable';
-    return { view: status === 'ok' ? 'full' : status === 'limited_view' ? 'limited' : status, renewed };
+    return { view: status === 'ok' ? 'full' : status === 'limited_view' ? 'limited' : status, renewed, account };
   } finally { await page.close(); }
 }
 
@@ -358,8 +382,9 @@ export async function readPlace(page, place, { maxImages = 12, maxMenuImages = 2
   let status = await pageStatus(page);
   let renewed = 0;
   if (status === 'limited_view' && recoverView) ({ status, renewed } = await recoverFullView(page, target, status));
-  // Which view Google served this place in (see placeView).
-  const view = panelRead => ({ view: placeView(status, panelRead), view_renewed: renewed });
+  // Which view Google served this place in (see placeView), and whether the profile is signed in (accountState).
+  const account = await accountState(page);
+  const view = panelRead => ({ view: placeView(status, panelRead), view_renewed: renewed, account });
   const canonical = safeMapsUrl(page.url()) || target;
   const identity = placeIdentity(canonical) || placeIdentity(target);
   if (!['ok', 'limited_view'].includes(status)) return { status, ...view(false), source_id: identity, google_maps_url: canonical };
