@@ -116,9 +116,10 @@ function readDetailsDom() {
   }
   const categoryNode = byId('category') || first('button[jsaction*="category"], .DkEaL') || labelMatch(/^(?:category|kategori)\s*:/i);
   const businessType = stripPrefix(text(categoryNode), /^(?:category|kategori)\s*:\s*/i);
-  const priceNode = byId('price') || first('[aria-label^="Price:"], [aria-label^="Fiyat:"], [aria-label^="Price range:"]');
+  const priceNode = byId('price') || first('[aria-label^="Price:"], [aria-label^="Fiyat:"], [aria-label^="Price range:"], [aria-label^="Fiyat aralığı:"]');
+  // "₺200–400", "₺2.000+" (open-ended range), "$$", "₺400 kişi başı".
   const priceLevel = stripPrefix(text(priceNode), /^(?:price(?: range)?|fiyat(?: aralığı)?)\s*:\s*/i) ||
-    nodes('span').map(plain).find(value => /^(?:(?:[₺$€£¥]{1,4})|[₺$€£¥]\s*\d[\d.,]*(?:\s*[–—-]\s*[₺$€£¥]?\s*\d[\d.,]*)?(?:\s*(?:per person|kişi başı))?)$/.test(value)) || '';
+    nodes('span').map(plain).find(value => /^(?:(?:[₺$€£¥]{1,4})|[₺$€£¥]\s*\d[\d.,]*\+?(?:\s*[–—-]\s*[₺$€£¥]?\s*\d[\d.,]*\+?)?(?:\s*(?:per person|kişi başı))?)$/.test(value)) || '';
   const hourNode = byId('oh') || first('[data-item-id^="oh;"]') || labelMatch(/^(?:hours|opening hours|çalışma saatleri|açılış saatleri)\s*:/i);
   let openingHours = stripPrefix(text(hourNode), /^(?:hours|opening hours|çalışma saatleri|açılış saatleri)\s*:\s*/i) ||
     nodes('button, span').map(text).find(value => value.length < 180 && /(?:açılış (?:zamanı|saati)|kapanış (?:zamanı|saati)|çalışma saatlerini kopyala|copy opening hours|opening time|closing time|open 24 hours|24 saat açık|opens (?:at|\d)|closes (?:at|\d))/i.test(value)) || '';

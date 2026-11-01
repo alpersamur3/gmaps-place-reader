@@ -97,6 +97,15 @@ test('English labels, redirected website, and compact review counts', async () =
   });
 });
 
+test('price range: open-ended "₺2.000+" and the "Fiyat aralığı:" label are read', async () => {
+  await fixture('<div role="main"><h1>Pahalı Lokanta</h1><span>4,6</span><span>₺2.000+</span><span>Restoran</span></div>', async page => {
+    assert.equal((await extractPlaceDetails(page, { expandHours: false })).price_level, '₺2.000+');
+  });
+  await fixture('<div role="main"><h1>Orta Lokanta</h1><span aria-label="Fiyat aralığı: ₺200–400">₺200–400</span></div>', async page => {
+    assert.equal((await extractPlaceDetails(page, { expandHours: false })).price_level, '₺200–400');
+  });
+});
+
 test('rating line count fallback and missing contact fields remain empty', async () => {
   await fixture('<div role="main"><h1>A Cafe</h1><div><span role="img" aria-label="4.8 stars"></span> (2,345)</div></div>', async page => {
     const result = await extractPlaceDetails(page, { expandHours: false });
