@@ -10,10 +10,11 @@ What `readPlace` / `readPlaceUrl` return, and the flat record `toObservation` / 
 |---|---|
 | `status` | `ok` · `incomplete` (some parts could not be read, see `warnings`) · `limited_view` · `consent_required` · `auth_required` · `blocked` · `unavailable`. |
 | `view`, `view_renewed` | `full` · `limited` · `unknown` (consent, sign-in or block page, or a place panel that did not load), and how many anonymous ids were brought in for this place ([Full view](full-view.md)). |
+| `account` | `signed_in` · `signed_out` · `unknown`: whether the profile is signed in to Google, read from the page's header buttons ([Signing in](sign-in.md)). |
 | `source_id` | Stable identity: feature id (`0x…:0x…`), else `cid:…` or `place:…`. |
 | `google_maps_url` | The canonical link that was read (always with `hl=tr`). |
 | `name`, `address`, `phone`, `website`, `menu_url` | Business details as Maps shows them. |
-| `business_type`, `price_level`, `description` | Category, price range (e.g. `₺200–1.000`), description when the business has one. |
+| `business_type`, `price_level`, `description` | Category, price range (e.g. `₺200–1.000`, `₺2.000+`, `$$`), description when the business has one. |
 | `rating`, `review_count`, `rating_label`, `review_label` | Numbers and the labels they were read from. |
 | `opening_hours` | Summary line (e.g. "Açık · Kapanış saati: 00:00"). |
 | `opening_hours_rows` | `[{ day, hours }]` for each day; seven rows in the full view. |

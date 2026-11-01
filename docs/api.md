@@ -2,13 +2,13 @@
 
 [Türkçe](tr/api.md) · [Docs index](README.md)
 
-ESM only: `import { … } from 'gmaps-place-reader'`. Subpath exports: `gmaps-place-reader/media`, `/details`, `/reviews`, `/mcp` (the [MCP server](mcp.md): `createMcpServer`, `TOOLS`).
+ESM only: `import { … } from 'gmaps-place-reader'`. Subpath exports: `gmaps-place-reader/media`, `/details`, `/reviews`, `/login` (the sign-in flow behind `gmaps-login`), `/mcp` (the [MCP server](mcp.md): `createMcpServer`, `TOOLS`).
 
 ## Browser
 
 | Function | Description |
 |---|---|
-| `launchBrowser(options?)` | Starts Chrome/Chromium through `puppeteer-core`. Options: `executablePath` (or `MAPS_CHROME_PATH`; the default Windows install is found automatically), `userDataDir` (or `MAPS_PROFILE_DIR`; absolute, **recommended**), `headless` (default `true`). No account is used and no cookies are loaded. |
+| `launchBrowser(options?)` | Starts Chrome/Chromium through `puppeteer-core`. Options: `executablePath` (or `MAPS_CHROME_PATH`; the default Windows install is found automatically), `userDataDir` (or `MAPS_PROFILE_DIR`; absolute, **recommended**), `headless` (default `true`). A profile signed in once with `gmaps-login` gives the full view ([Signing in](sign-in.md)); no cookie files are loaded. |
 | `newMapsPage(browser)` | A page prepared for Maps: the installed Chrome's desktop user agent (never `HeadlessChrome`) and Turkish UI. |
 | `chromeExecutable(options?)` | The Chrome path that `launchBrowser` would use. |
 
@@ -35,7 +35,7 @@ ESM only: `import { … } from 'gmaps-place-reader'`. Subpath exports: `gmaps-pl
 | `maxReviews` | 100 | Up to 10,000. |
 | `maxReviewScrolls` | 25 | Up to 1,000; each step loads about 10 reviews. |
 | `reviewSort` | `relevant` | `relevant` · `newest` · `highest` · `lowest`. |
-| `recoverView` | `true` | Repair a limited view ([Full view](full-view.md#how-the-reader-keeps-the-full-view)). |
+| `recoverView` | `true` | Repair a limited anonymous view ([Full view](full-view.md#how-the-reader-keeps-the-full-view)); does nothing on a signed-in profile. |
 | `onProgress(event, page)` | — | Called with stages `overview`, `menu_category`, `menu_photos`, `reviews`; useful for screenshots. |
 
 ## Parts of a place
@@ -48,13 +48,15 @@ ESM only: `import { … } from 'gmaps-place-reader'`. Subpath exports: `gmaps-pl
 | `readReviews(page, { overviewUrl, reviewCount, maxReviews, maxScrolls, sort, onProgress })` | Reviews with exact dates when Google sends them ([fields](data.md#reviews-placereviews)). |
 | `extractPlaceDetails(page)`, `extractAboutDetails(page)` (`/details`) | Business details, About attributes. |
 
-## View
+## View and account
 
 | Function | Description |
 |---|---|
-| `checkView(browser, url = VIEW_CHECK_PLACE)` | Opens one place, repairs a limited view: `{ view: 'full' \| 'limited' \| …, renewed }`. |
+| `checkView(browser, url = VIEW_CHECK_PLACE, { repair = true })` | Opens one place, repairs a limited anonymous view unless `repair` is `false`: `{ view: 'full' \| 'limited' \| …, renewed, account }`. |
+| `accountState(page, { waitMs = 4000 })` | `signed_in` · `signed_out` · `unknown`, read from the Maps header buttons (account button or Sign in link); waits up to `waitMs` for the header. |
+| `signIn({ userDataDir, executablePath?, port = 0, timeoutMs, onStatus })` (`/login`) | The `gmaps-login` flow: opens an ordinary Chrome window on the profile at Google's sign-in page (under `xvfb-run` on Linux without a display), waits until Maps opens, closes the window: `{ outcome: 'signed_in_page' \| 'closed' \| 'timeout' \| 'not_listening', port, virtual }`. Check the profile afterwards with `checkView(browser, url, { repair: false })`. [Signing in](sign-in.md). |
 | `mintFullViewCookies(executablePath, { attempts = 6, place })` | Full-view anonymous id cookies from fresh temporary profiles, or `null`. |
-| `nextViewStep(state)` | The recovery decision (`reload` · `renew` · `stop`), exported for tests. |
+| `nextViewStep(state)` | The recovery decision (`reload` · `renew` · `stop`; `stop` for a signed-in profile), exported for tests. |
 | `VIEW_CHECK_PLACE` | The well-known place used by `checkView`. |
 
 ## Helpers

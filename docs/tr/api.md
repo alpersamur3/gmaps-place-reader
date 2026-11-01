@@ -2,13 +2,13 @@
 
 [English](../api.md) · [Doküman dizini](README.md)
 
-Yalnız ESM: `import { … } from 'gmaps-place-reader'`. Alt yol dışa aktarımları: `gmaps-place-reader/media`, `/details`, `/reviews`, `/mcp` ([MCP sunucusu](mcp.md): `createMcpServer`, `TOOLS`).
+Yalnız ESM: `import { … } from 'gmaps-place-reader'`. Alt yol dışa aktarımları: `gmaps-place-reader/media`, `/details`, `/reviews`, `/login` (`gmaps-login`'in arkasındaki oturum açma akışı), `/mcp` ([MCP sunucusu](mcp.md): `createMcpServer`, `TOOLS`).
 
 ## Tarayıcı
 
 | Fonksiyon | Açıklama |
 |---|---|
-| `launchBrowser(options?)` | Chrome/Chromium'u `puppeteer-core` ile başlatır. Seçenekler: `executablePath` (ya da `MAPS_CHROME_PATH`; Windows'taki varsayılan kurulum kendiliğinden bulunur), `userDataDir` (ya da `MAPS_PROFILE_DIR`; mutlak yol, **önerilir**), `headless` (varsayılan `true`). Hesap kullanılmaz, çerez yüklenmez. |
+| `launchBrowser(options?)` | Chrome/Chromium'u `puppeteer-core` ile başlatır. Seçenekler: `executablePath` (ya da `MAPS_CHROME_PATH`; Windows'taki varsayılan kurulum kendiliğinden bulunur), `userDataDir` (ya da `MAPS_PROFILE_DIR`; mutlak yol, **önerilir**), `headless` (varsayılan `true`). `gmaps-login` ile bir kez oturum açılmış profil tam görünümü verir ([Oturum açma](sign-in.md)); çerez dosyası yüklenmez. |
 | `newMapsPage(browser)` | Maps için hazırlanmış sayfa: kurulu Chrome'un masaüstü user agent'ı (asla `HeadlessChrome` değil) ve Türkçe arayüz. |
 | `chromeExecutable(options?)` | `launchBrowser`'ın kullanacağı Chrome yolu. |
 
@@ -35,7 +35,7 @@ Yalnız ESM: `import { … } from 'gmaps-place-reader'`. Alt yol dışa aktarım
 | `maxReviews` | 100 | En fazla 10.000. |
 | `maxReviewScrolls` | 25 | En fazla 1.000; her adım yaklaşık 10 yorum yükler. |
 | `reviewSort` | `relevant` | `relevant` · `newest` · `highest` · `lowest`. |
-| `recoverView` | `true` | Sınırlı görünümü onar ([Tam görünüm](full-view.md#okuyucu-tam-görünümü-nasıl-korur)). |
+| `recoverView` | `true` | Sınırlı oturumsuz görünümü onar ([Tam görünüm](full-view.md#okuyucu-tam-görünümü-nasıl-korur)); oturum açık profilde bir şey yapmaz. |
 | `onProgress(event, page)` | — | `overview`, `menu_category`, `menu_photos`, `reviews` aşamalarında çağrılır; ekran görüntüsü için kullanışlı. |
 
 ## Mekânın parçaları
@@ -48,13 +48,15 @@ Yalnız ESM: `import { … } from 'gmaps-place-reader'`. Alt yol dışa aktarım
 | `readReviews(page, { overviewUrl, reviewCount, maxReviews, maxScrolls, sort, onProgress })` | Google gönderdiğinde kesin tarihleriyle yorumlar ([alanlar](data.md#yorumlar-placereviews)). |
 | `extractPlaceDetails(page)`, `extractAboutDetails(page)` (`/details`) | İşletme bilgileri, Hakkında özellikleri. |
 
-## Görünüm
+## Görünüm ve hesap
 
 | Fonksiyon | Açıklama |
 |---|---|
-| `checkView(browser, url = VIEW_CHECK_PLACE)` | Bir mekânı açar, sınırlı görünümü onarır: `{ view: 'full' \| 'limited' \| …, renewed }`. |
+| `checkView(browser, url = VIEW_CHECK_PLACE, { repair = true })` | Bir mekânı açar, `repair` `false` değilse sınırlı oturumsuz görünümü onarır: `{ view: 'full' \| 'limited' \| …, renewed, account }`. |
+| `accountState(page, { waitMs = 4000 })` | `signed_in` · `signed_out` · `unknown`; Maps başlığındaki düğmelerden (hesap düğmesi ya da Oturum açın bağlantısı) okunur, başlık için en çok `waitMs` bekler. |
+| `signIn({ userDataDir, executablePath?, port = 0, timeoutMs, onStatus })` (`/login`) | `gmaps-login` akışı: profilde Google'ın oturum açma sayfasında sıradan bir Chrome penceresi açar (ekransız Linux'ta `xvfb-run` altında), Maps açılana kadar bekler, pencereyi kapatır: `{ outcome: 'signed_in_page' \| 'closed' \| 'timeout' \| 'not_listening', port, virtual }`. Ardından profili `checkView(browser, url, { repair: false })` ile denetleyin. [Oturum açma](sign-in.md). |
 | `mintFullViewCookies(executablePath, { attempts = 6, place })` | Yeni geçici profillerden tam görünüm veren anonim kimlik çerezleri ya da `null`. |
-| `nextViewStep(state)` | Onarım kararı (`reload` · `renew` · `stop`), testler için dışa aktarılır. |
+| `nextViewStep(state)` | Onarım kararı (`reload` · `renew` · `stop`; oturum açık profilde `stop`), testler için dışa aktarılır. |
 | `VIEW_CHECK_PLACE` | `checkView`'ın kullandığı iyi bilinen mekân. |
 
 ## Yardımcılar

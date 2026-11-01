@@ -4,11 +4,11 @@
 
 `gmaps-mcp` lets AI agents read Google Maps through the [Model Context Protocol](https://modelcontextprotocol.io): Claude Code, Claude Desktop and any other MCP client. The agent can search places, read a place (details, About attributes, the written menu with prices, the menu album with the month each photo was taken, gallery photos), read reviews, and look at photos as images, for example to read a menu page.
 
-It runs on your own computer with your own Chrome or Chromium. There is no API key, no Google account and no hosted service.
+It runs on your own computer with your own Chrome or Chromium. There is no API key and no hosted service. Since late October 2026 Google shows anonymous browsers only a limited place page (no menu), so sign the profile in once with `gmaps-login` ([Signing in](sign-in.md)); the server then reads the full view.
 
 ## Setup
 
-You need Node.js 20+ and Chrome or Chromium. Choose a folder for a persistent browser profile (absolute path): it keeps Google's full view, see [Full view without an account](full-view.md). On Linux and macOS also set `MAPS_CHROME_PATH`.
+You need Node.js 20+ and Chrome or Chromium. Choose a folder for a persistent browser profile (absolute path) and sign it in once with `MAPS_PROFILE_DIR=<folder> npx -p gmaps-place-reader gmaps-login` ([Signing in](sign-in.md)); it keeps Google's full view, see [Full view](full-view.md). On Linux and macOS also set `MAPS_CHROME_PATH`.
 
 **Claude Code:**
 
@@ -49,7 +49,7 @@ claude mcp add gmaps -e MAPS_PROFILE_DIR=/absolute/path/gmaps-profile -- npx -y 
 
 | Environment variable | Default | Meaning |
 |---|---|---|
-| `MAPS_PROFILE_DIR` | — | Persistent browser profile, absolute path. Recommended. |
+| `MAPS_PROFILE_DIR` | — | Persistent browser profile, absolute path, signed in with `gmaps-login`. Recommended. |
 | `MAPS_CHROME_PATH` | Windows Chrome | Chrome or Chromium binary. |
 | `MAPS_MCP_MAX_READS` | 30 | `search`, `place` and `reviews` calls per session. `0` = no limit. |
 | `MAPS_MCP_MAX_PHOTOS` | 100 | Photos per session for the `photos` tool. `0` = no limit. |
@@ -61,7 +61,7 @@ A session is one run of the server; the client starts it.
 
 - **One browser, one read at a time.** Chrome opens at the first read and closes when the client disconnects. Calls wait for each other, so an agent that asks for several places gets them one after another.
 - **Long reads report progress** when the client sends a `progressToken`. If your client stops waiting, raise its tool timeout (Claude Code: `MCP_TOOL_TIMEOUT`, in milliseconds) or ask for fewer menu photos and reviews.
-- **Honest results.** Every result says what could not be read: `status`, `view` and `warnings` ([Troubleshooting](troubleshooting.md)). A limited view is repaired as described in [Full view](full-view.md).
+- **Honest results.** Every result says what could not be read: `status`, `view`, `account` and `warnings` ([Troubleshooting](troubleshooting.md)). A limited view on a signed-out profile means the profile needs `gmaps-login` ([Signing in](sign-in.md)).
 - **Errors** come back as tool errors: `INVALID_MAPS_URL`, `QUERY_AND_LOCATION_REQUIRED`, `READ_LIMIT: …`, `CHROME_PATH_REQUIRED`, `MAPS_PROFILE_PATH_MUST_BE_ABSOLUTE`, or `MAPS_READ_FAILED: …` with a short reason.
 
 ## Use it responsibly

@@ -2,7 +2,7 @@
 
 [Türkçe](tr/cli.md) · [Docs index](README.md)
 
-All commands print one JSON object to stdout. They exit with `0` on success and `2` on errors (with `error_code`); `gmaps-view` uses `3` for "not the full view". Configuration comes from flags, then the JSON request, then the environment (`MAPS_CHROME_PATH`, `MAPS_PROFILE_DIR`). No account is used and no cookies are loaded. The MCP server for AI agents, `gmaps-mcp`, has its own page: [MCP server](mcp.md).
+All commands print one JSON object to stdout. They exit with `0` on success and `2` on errors (with `error_code`); `gmaps-view` uses `3` for "not the full view". Configuration comes from flags, then the JSON request, then the environment (`MAPS_CHROME_PATH`, `MAPS_PROFILE_DIR`). The full view needs a profile that was signed in once with `gmaps-login` ([Signing in](sign-in.md)); no cookie files are loaded. The MCP server for AI agents, `gmaps-mcp`, has its own page: [MCP server](mcp.md).
 
 ## gmaps-place — one place by link
 
@@ -33,6 +33,7 @@ Response (`schema_version: "gmaps.place.response.v1"`):
 | `status` | Summary for the menu: `menu_found`, `menu_partial` (limits reached, or not a full view), `menu_not_found` (the place has no menu photos), `unavailable`. |
 | `detail_status` | The place's status: `ok`, `incomplete`, `limited_view`, … (see [Troubleshooting](troubleshooting.md)). |
 | `view` | `full` · `limited` · `unknown`. |
+| `account` | `signed_in` · `signed_out` · `unknown`: whether the profile is signed in ([Signing in](sign-in.md)). |
 | `place` | The whole `readPlace` result (see [Data](data.md)); image URLs are the large variant, `preview_url` keeps the observed one. |
 | `reviews` | Review records (empty without `--reviews`). |
 | `menu_assets`, `assets` | Menu album photos and general photos, large URLs. |
@@ -50,17 +51,29 @@ Request fields: `location` (required), `keyword` (default `restoran`), `limit` (
 
 Response (`schema_version: "gmaps.scan.v1"`): `status` (`ok` or `incomplete` when a place could not be read completely), `items` (one [observation](data.md#observation-gmapsplacev1) per place), `skipped_known`, `search` (`status`, `truncated`, `requested_limit`).
 
-## gmaps-view — keep a profile in the full view
+## gmaps-login — sign the profile in once
 
 ```bash
-MAPS_PROFILE_DIR=/srv/gmaps/profile npx gmaps-view                     # reports the view, repairs a limited one
+MAPS_PROFILE_DIR=/srv/gmaps/profile npx gmaps-login                 # a computer with a screen: sign in in the window that opens
+MAPS_PROFILE_DIR=/srv/gmaps/profile npx gmaps-login --port 9222     # a server: drive the window through an SSH tunnel + chrome://inspect
+```
+
+Opens an ordinary (not automated) Chrome window on the profile at Google's sign-in page; the window closes by itself when Maps opens, then the profile is checked headlessly. On Linux without a display the window runs under `xvfb-run` (package `xvfb`). Flags: `--profile <absolute dir>` (or `MAPS_PROFILE_DIR`, required), `--port <n>` (DevTools port on 127.0.0.1; default: any free port), `--timeout <minutes>` (default 15), `--place <url>` (the place used for the check). The whole procedure, including the server steps: [Signing in](sign-in.md).
+
+Output: `{ "status": "ok", "outcome": "signed_in_page" | "closed" | "timeout" | "not_listening", "account", "view", "profile" }`. Exit code `0` = signed in, `3` = not signed in, `2` = error.
+
+## gmaps-view — check a profile, keep it in the full view
+
+```bash
+MAPS_PROFILE_DIR=/srv/gmaps/profile npx gmaps-view                     # reports view and account, repairs a limited anonymous view
+MAPS_PROFILE_DIR=/srv/gmaps/profile npx gmaps-view --no-repair         # only reports (signed-in profiles)
 MAPS_PROFILE_DIR=/srv/gmaps/profile npx gmaps-view --place "<link>"    # check with another place
 ```
 
-Output: `{ "status": "ok", "view": "full" | "limited" | …, "renewed", "profile" }`. `--profile <absolute dir>` overrides `MAPS_PROFILE_DIR`.
+Output: `{ "status": "ok", "view": "full" | "limited" | …, "renewed", "account", "profile" }`. `--profile <absolute dir>` overrides `MAPS_PROFILE_DIR`.
 
-Exit code `0` = full view, `3` = not full, `2` = error. Run it hourly from cron; see [Full view](full-view.md).
+Exit code `0` = full view, `3` = not full, `2` = error. Run it hourly from cron; see [Full view](full-view.md) and [Signing in](sign-in.md).
 
 ## Error codes
 
-`CHROME_PATH_REQUIRED` (set `MAPS_CHROME_PATH`), `MAPS_PROFILE_PATH_MUST_BE_ABSOLUTE`, `INVALID_MAPS_URL`, `INVALID_SCHEMA`, `INVALID_ARGUMENT`, `INPUT_TOO_LARGE`, `LOCATION_REQUIRED`, `BROWSER_FAILED` (anything else). Errors never contain file paths.
+`CHROME_PATH_REQUIRED` (set `MAPS_CHROME_PATH`), `MAPS_PROFILE_PATH_MUST_BE_ABSOLUTE`, `MAPS_PROFILE_DIR_REQUIRED` (`gmaps-login` needs a profile), `DISPLAY_REQUIRED` (`gmaps-login` on Linux without a display and without `xvfb-run`), `INVALID_MAPS_URL`, `INVALID_SCHEMA`, `INVALID_ARGUMENT`, `INPUT_TOO_LARGE`, `LOCATION_REQUIRED`, `BROWSER_FAILED` (anything else). Errors never contain file paths.

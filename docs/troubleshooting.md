@@ -10,9 +10,9 @@ Every result says what it could and could not read. Check `status` and `view` fi
 |---|---|---|
 | `ok` | Everything that was requested was read. Limits you set may still have stopped a list (`…_LIMIT_OR_SCROLL_LIMIT`). | — |
 | `incomplete` | The place was read in the full view, but a part failed; see `warnings`. | Usually transient; read the place again. |
-| `limited_view` | Google served the limited view and it could not be repaired ([Full view](full-view.md)). Menu items, the album and some details are missing. Since late October 2026 Google serves it to every anonymous browser. | Use a persistent profile and run `gmaps-view`. Make sure the user agent's operating system matches the one the profile was created on. |
+| `limited_view` | Google served the limited view and it could not be repaired ([Full view](full-view.md)). Menu items, the album and some details are missing. Since late October 2026 Google serves it to every anonymous browser. | Sign the persistent profile in once with `gmaps-login` ([Signing in](sign-in.md)) and keep `gmaps-view --no-repair` running from cron. For anonymous profiles: run `gmaps-view` and make sure the user agent's operating system matches the one the profile was created on. |
 | `consent_required` | The EU consent page could not be passed (no "Reject all" button). | Check the page in a visible browser (`headless: false`). |
-| `auth_required` | Google showed a sign-in page instead of the place. | Rare. Read the place again; if it repeats, start with a fresh profile. |
+| `auth_required` | Google showed a sign-in page instead of the place. | Rare. Read the place again; if it repeats on a signed-in profile, the session ended: run `gmaps-login` again on that machine. Otherwise start with a fresh profile. |
 | `blocked` | "Unusual traffic" / CAPTCHA. The reader never tries to bypass it. | Slow down, pause, read fewer places per run. |
 | `unavailable` | The place panel did not load, or the link is not a place. | Check the link; try again. |
 
@@ -41,7 +41,9 @@ Every result says what it could and could not read. Check `status` and `view` fi
 
 **The same photo has different URLs in different runs.** Google signs photo URLs per browser (`gps-cs-s/…`, `grass-cs/…`). Compare photos by `taken_at`, `width`, `height` and `label`, not by URL.
 
-**Results differ between two computers.** Check `view` in both results. A limited view on one of them means its profile holds a limited anonymous id; `gmaps-view` repairs it.
+**Results differ between two computers.** Check `view` and `account` in both results. Since late October 2026 the full view needs a signed-in profile (`account: 'signed_in'`); sign in with `gmaps-login` on the computer that shows `limited`.
+
+**The profile was signed in, now `account` is `signed_out`.** Run `gmaps-login` again on the same machine. A profile that was signed in on one computer and copied to another is signed out by Google within minutes to hours; create the session where the reader runs ([Signing in](sign-in.md)).
 
 **Chrome does not start on Linux.** Set `MAPS_CHROME_PATH` (e.g. `/usr/bin/google-chrome`), run as a normal user (not root), and give each running browser its own profile folder.
 

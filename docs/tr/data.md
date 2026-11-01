@@ -10,10 +10,11 @@
 |---|---|
 | `status` | `ok` · `incomplete` (bazı kısımlar okunamadı, `warnings`'e bakın) · `limited_view` · `consent_required` · `auth_required` · `blocked` · `unavailable`. |
 | `view`, `view_renewed` | `full` · `limited` · `unknown` (onay, oturum açma ya da engel sayfası veya yüklenmeyen mekân paneli) ve bu mekân için kaç anonim kimlik getirildiği ([Tam görünüm](full-view.md)). |
+| `account` | `signed_in` · `signed_out` · `unknown`: profilde Google oturumu açık mı; sayfanın başlık düğmelerinden okunur ([Oturum açma](sign-in.md)). |
 | `source_id` | Kalıcı kimlik: özellik kimliği (`0x…:0x…`), yoksa `cid:…` ya da `place:…`. |
 | `google_maps_url` | Okunan kanonik link (her zaman `hl=tr` ile). |
 | `name`, `address`, `phone`, `website`, `menu_url` | Maps'in gösterdiği işletme bilgileri. |
-| `business_type`, `price_level`, `description` | Kategori, fiyat aralığı (ör. `₺200–1.000`), varsa açıklama. |
+| `business_type`, `price_level`, `description` | Kategori, fiyat aralığı (ör. `₺200–1.000`, `₺2.000+`, `$$`), varsa açıklama. |
 | `rating`, `review_count`, `rating_label`, `review_label` | Sayılar ve okundukları etiketler. |
 | `opening_hours` | Özet satır (ör. "Açık · Kapanış saati: 00:00"). |
 | `opening_hours_rows` | Her gün için `[{ day, hours }]`; tam görünümde yedi satır. |

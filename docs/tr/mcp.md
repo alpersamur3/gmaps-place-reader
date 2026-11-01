@@ -4,11 +4,11 @@
 
 `gmaps-mcp`, yapay zekâ ajanlarının Google Maps'i [Model Context Protocol](https://modelcontextprotocol.io) üzerinden okumasını sağlar: Claude Code, Claude Desktop ve diğer MCP istemcileri. Ajan mekân arayabilir; bir mekânı okuyabilir (bilgiler, Hakkında özellikleri, fiyatlı yazılı menü, her fotoğrafın çekildiği ayla menü albümü, galeri fotoğrafları); yorumları okuyabilir ve fotoğraflara görsel olarak bakabilir, örneğin bir menü sayfasını okumak için.
 
-Kendi bilgisayarınızda, kendi Chrome ya da Chromium'unuzla çalışır. API anahtarı, Google hesabı ya da barındırılan bir servis yoktur.
+Kendi bilgisayarınızda, kendi Chrome ya da Chromium'unuzla çalışır. API anahtarı ya da barındırılan bir servis yoktur. Ekim 2026 sonundan beri Google oturumsuz tarayıcılara yalnız sınırlı mekân sayfasını (menüsüz) gösterdiği için profilde `gmaps-login` ile bir kez oturum açın ([Oturum açma](sign-in.md)); sunucu sonra tam görünümü okur.
 
 ## Kurulum
 
-Node.js 20+ ve Chrome ya da Chromium gerekir. Kalıcı tarayıcı profili için bir klasör seçin (mutlak yol): Google'ın tam görünümünü korur, bkz. [Hesapsız tam görünüm](full-view.md). Linux ve macOS'ta `MAPS_CHROME_PATH`'i de ayarlayın.
+Node.js 20+ ve Chrome ya da Chromium gerekir. Kalıcı tarayıcı profili için bir klasör seçin (mutlak yol) ve `MAPS_PROFILE_DIR=<klasör> npx -p gmaps-place-reader gmaps-login` ile bir kez oturum açın ([Oturum açma](sign-in.md)); Google'ın tam görünümünü korur, bkz. [Tam görünüm](full-view.md). Linux ve macOS'ta `MAPS_CHROME_PATH`'i de ayarlayın.
 
 **Claude Code:**
 
@@ -49,7 +49,7 @@ claude mcp add gmaps -e MAPS_PROFILE_DIR=/mutlak/yol/gmaps-profile -- npx -y -p 
 
 | Ortam değişkeni | Varsayılan | Anlamı |
 |---|---|---|
-| `MAPS_PROFILE_DIR` | — | Kalıcı tarayıcı profili, mutlak yol. Önerilir. |
+| `MAPS_PROFILE_DIR` | — | Kalıcı tarayıcı profili, mutlak yol, `gmaps-login` ile oturum açılmış. Önerilir. |
 | `MAPS_CHROME_PATH` | Windows Chrome'u | Chrome ya da Chromium dosyası. |
 | `MAPS_MCP_MAX_READS` | 30 | Oturum başına `search`, `place` ve `reviews` çağrısı. `0` = sınır yok. |
 | `MAPS_MCP_MAX_PHOTOS` | 100 | Oturum başına `photos` aracıyla bakılan fotoğraf. `0` = sınır yok. |
@@ -61,7 +61,7 @@ Oturum, sunucunun bir çalışmasıdır; sunucuyu istemci başlatır.
 
 - **Tek tarayıcı, sırayla okuma.** Chrome ilk okumada açılır, istemci bağlantıyı kapatınca kapanır. Çağrılar birbirini bekler; birkaç mekân isteyen ajan onları art arda alır.
 - **Uzun okumalar ilerleme bildirir** (istemci `progressToken` gönderirse). İstemciniz beklemeyi bırakıyorsa araç zaman aşımını artırın (Claude Code: `MCP_TOOL_TIMEOUT`, milisaniye) ya da daha az menü fotoğrafı ve yorum isteyin.
-- **Dürüst sonuçlar.** Her sonuç neyin okunamadığını söyler: `status`, `view` ve `warnings` ([Sorun giderme](troubleshooting.md)). Sınırlı görünüm [Tam görünüm](full-view.md) sayfasındaki gibi onarılır.
+- **Dürüst sonuçlar.** Her sonuç neyin okunamadığını söyler: `status`, `view`, `account` ve `warnings` ([Sorun giderme](troubleshooting.md)). Oturumsuz bir profilde sınırlı görünüm, profilin `gmaps-login` istediği anlamına gelir ([Oturum açma](sign-in.md)).
 - **Hatalar** araç hatası olarak döner: `INVALID_MAPS_URL`, `QUERY_AND_LOCATION_REQUIRED`, `READ_LIMIT: …`, `CHROME_PATH_REQUIRED`, `MAPS_PROFILE_PATH_MUST_BE_ABSOLUTE` ya da kısa bir nedenle `MAPS_READ_FAILED: …`.
 
 ## Sorumlu kullanım

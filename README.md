@@ -2,7 +2,7 @@
 
 # gmaps-place-reader
 
-**Read Google Maps places with a real browser: business details, menu items and the complete dated menu album, and dated reviews. No Places API key, no Google account. Includes an MCP server for AI agents.**
+**Read Google Maps places with a real browser: business details, menu items and the complete dated menu album, and dated reviews. No Places API key; one Google sign-in (`gmaps-login`) for the full view. Includes an MCP server for AI agents.**
 
 [![npm version](https://img.shields.io/npm/v/gmaps-place-reader.svg)](https://www.npmjs.com/package/gmaps-place-reader)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/alpersamur3/gmaps-place-reader/blob/main/LICENSE)
@@ -21,7 +21,7 @@
 
 ### Contents
 
-[Features](#features) · [Install](#install) · [Quick start](#quick-start) · [Documentation](#documentation) · [API](#api) · [Command line](#command-line) · [MCP server](#mcp-server) · [Configuration](#configuration) · [Full view without an account](#full-view-without-an-account) · [Limitations](#limitations) · [Disclaimer](#disclaimer)
+[Features](#features) · [Install](#install) · [Quick start](#quick-start) · [Documentation](#documentation) · [API](#api) · [Command line](#command-line) · [MCP server](#mcp-server) · [Configuration](#configuration) · [Full view and signing in](#full-view-and-signing-in) · [Limitations](#limitations) · [Disclaimer](#disclaimer)
 
 ### Features
 
@@ -30,7 +30,7 @@
 - **About content:** business description when Google provides one and categorized attributes such as access, service, atmosphere and payment options.
 - **The complete menu photo album.** The Menu strip on the overview only renders a few thumbnails even when it says "Photo 1/12", so the album is read in the full-screen photo viewer. Every photo comes with its full-size URL, **original dimensions** and **the month it was taken** (`taken_at`, e.g. `2026-01`), which lets you prefer the newest menu when older photos show outdated prices.
 - **Menu items and prices** from the Menu tab, by category.
-- **Full view without an account.** Google shows anonymous browsers either a limited or the full place page. A persistent profile keeps the full view, and the reader repairs a limited view by itself; every result says which view it got (`view`). A Google account would add nothing: in our tests a signed-in session returned exactly the same data. See [Full view without an account](docs/full-view.md).
+- **Full view with one sign-in.** Since late October 2026 Google shows anonymous browsers only a limited place page (no Menu tab, no menu items, usually no menu album). `gmaps-login` signs the reader's profile in once, in an ordinary Chrome window, also on a server without a screen (SSH tunnel + `chrome://inspect`); the headless reader then gets the full view, and every result says which view and account state it got (`view`, `account`). See [Signing in](docs/sign-in.md) and [Full view](docs/full-view.md).
 - **Detailed, dated reviews on request:** reviewer, rating (rating-only reviews included), full text, owner response, likes, attached photos, sub-ratings and other details (`Yiyecek: 5`, price per person …), edit and "translated by Google" markers. Each review gets its **exact posting date** (`date_iso`) read from the data Google sends to the page, checked against the "2 months ago" label; otherwise an approximate date (`date_estimate`) with its precision. Optional **newest-first** order (`reviewSort: 'newest'`); the list is paged to the end, so every review can be read.
 - **One-link lookup:** pass a Google Maps link to `readPlaceUrl` or `gmaps-place --url ...` — `maps.app.goo.gl` share links, links on any Google country domain (`google.com.tr`, …), `?cid=` links, and links copied while the Menu or Reviews tab was open.
 - **MCP server for AI agents** (`gmaps-mcp`): Claude Code, Claude Desktop and other MCP clients can search places, read details, menus and reviews, and look at photos, e.g. to read a menu page. See [MCP server](docs/mcp.md).
@@ -56,7 +56,7 @@ export MAPS_CHROME_PATH=/usr/bin/google-chrome   # or /usr/bin/chromium
 ```js
 import { launchBrowser, newMapsPage, searchPlaces, readPlace } from 'gmaps-place-reader';
 
-// A persistent profile keeps Google's full view; no account or cookies needed.
+// A persistent profile, signed in once with gmaps-login, keeps Google's full view.
 const browser = await launchBrowser({ userDataDir: '/absolute/path/gmaps-profile' });
 try {
   const page = await newMapsPage(browser);
@@ -76,7 +76,7 @@ try {
 
 ### Documentation
 
-Detailed documentation lives in [`docs/`](docs/README.md): [full view without an account](docs/full-view.md) · [API reference](docs/api.md) · [data reference](docs/data.md) (every field) · [command line](docs/cli.md) · [MCP server](docs/mcp.md) · [statuses, warnings and troubleshooting](docs/troubleshooting.md).
+Detailed documentation lives in [`docs/`](docs/README.md): [signing in for the full view](docs/sign-in.md) · [full view](docs/full-view.md) · [API reference](docs/api.md) · [data reference](docs/data.md) (every field) · [command line](docs/cli.md) · [MCP server](docs/mcp.md) · [statuses, warnings and troubleshooting](docs/troubleshooting.md).
 
 ### API
 
@@ -92,20 +92,23 @@ Detailed documentation lives in [`docs/`](docs/README.md): [full view without an
 | `scan(browser, { location, keyword?, limit?, known?, maxImages?, maxMenuImages?, includeReviews?, maxReviews?, maxReviewScrolls? })` | Search and details in one call; optionally collects reviews and returns `{ status, items, skipped_known }` with normalized records. Places listed in `known` (`{ source: 'google_maps_browser', source_id }`) are skipped. |
 | `toObservation(place, detail)` | Flattens a `readPlace` result into one record (`schema_version: 'gmaps.place.v1'`) with `assets`, `menu_assets` and optional reviews. |
 
-Helpers: `normalizePlaceUrl(url)` (check a link before launching a browser), `fullImageUrl(url)` (large variant of a Google photo URL), `placeIdentity(url)`, `pageStatus(page)`, `passConsent(page)`, `parseRelativeAge(label)`, `estimateReviewDate(label)`, `checkView(browser, url?)` (`{ view, renewed }`, repairs a limited view).
-Subpath exports: `gmaps-place-reader/media`, `/details`, `/reviews`.
+Helpers: `normalizePlaceUrl(url)` (check a link before launching a browser), `fullImageUrl(url)` (large variant of a Google photo URL), `placeIdentity(url)`, `pageStatus(page)`, `passConsent(page)`, `parseRelativeAge(label)`, `estimateReviewDate(label)`, `checkView(browser, url?, { repair? })` (`{ view, renewed, account }`), `accountState(page)`; `signIn(options)` from `gmaps-place-reader/login` (the `gmaps-login` flow).
+Subpath exports: `gmaps-place-reader/media`, `/details`, `/reviews`, `/login`, `/mcp`.
 
 Review options: `includeReviews` (default `false`), `maxReviews` (100, up to 10,000), `maxReviewScrolls` (25, up to 1,000 — each step loads about 10 reviews), `reviewSort` (`relevant` · `newest` · `highest` · `lowest`). Review fields: `review_id`, `author`, `author_summary`, `rating`, `text`, `date_label`, `date_iso`, `date_estimate`, `date_precision` (`exact`, `day`, `week`, `month`, `year` …), `edited`, `edited_estimate` (approximate edit date of an edited review), `translated`, `photos`, `owner_response`, `likes`, `language`, `details` (the structured lines under a review: sub-ratings such as `{ name: 'Yiyecek', value: '5' }` and rows such as `{ name: 'Kişi başı fiyat', value: '₺400–600' }`). The `reviews` result also reports `sort_label` and `sort_applied`; when the requested order could not be chosen, `warnings` contains `REVIEW_SORT_NOT_APPLIED`.
 
-Every result carries `view` (`full` · `limited` · `unknown`). Every function, option and field: [docs/api.md](docs/api.md), [docs/data.md](docs/data.md).
+Every result carries `view` (`full` · `limited` · `unknown`) and `account` (`signed_in` · `signed_out` · `unknown`). Every function, option and field: [docs/api.md](docs/api.md), [docs/data.md](docs/data.md).
 
 **Statuses:** `ok`, `incomplete` (some parts could not be read, see `warnings`), `limited_view`, `auth_required`, `consent_required`, `blocked`, `unavailable`. Common warnings: `MENU_PHOTOS_UNAVAILABLE` (menu items were read but the menu photo album could not be opened), `REVIEWS_UNAVAILABLE`, `REVIEW_SORT_NOT_APPLIED`, `LIMITED_VIEW`, and `…_LIMIT_OR_SCROLL_LIMIT` when your own limits stopped a list.
 
 ### Command line
 
-The commands write one JSON response to stdout (exit code `2` on failure, with an `error_code`). Set `MAPS_PROFILE_DIR` to a persistent profile; no account or cookies are used. All flags and fields: [docs/cli.md](docs/cli.md).
+The commands write one JSON response to stdout (exit code `2` on failure, with an `error_code`). Set `MAPS_PROFILE_DIR` to a persistent profile and sign it in once with `gmaps-login`; no cookie files are used. All flags and fields: [docs/cli.md](docs/cli.md).
 
 ```bash
+# Once: sign the profile in (a window opens; on a server add --port 9222 and use an SSH tunnel, see docs/sign-in.md)
+MAPS_PROFILE_DIR=/absolute/private/profile npx gmaps-login
+
 # One place by link: details, menu, photos and the 300 newest reviews with dates
 MAPS_PROFILE_DIR=/absolute/private/profile npx gmaps-place --url "https://maps.app.goo.gl/your-place-link" --reviews --sort newest --max-reviews 300 --max-review-scrolls 40
 
@@ -113,13 +116,13 @@ MAPS_PROFILE_DIR=/absolute/private/profile npx gmaps-place --url "https://maps.a
 echo '{"schema_version":"gmaps.scan.request.v1","location":"Kadıköy, İstanbul","keyword":"cafe","limit":5}' \
   | MAPS_PROFILE_DIR=/absolute/private/profile npx gmaps-scan
 
-# Keep the profile in the full view (cron, hourly): exit code 0 = full view, 3 = limited
-MAPS_PROFILE_DIR=/absolute/private/profile npx gmaps-view
+# Check the profile (cron, hourly): exit code 0 = full view, 3 = limited; reports view and account
+MAPS_PROFILE_DIR=/absolute/private/profile npx gmaps-view --no-repair
 ```
 
 ### MCP server
 
-`gmaps-mcp` lets AI agents (Claude Code, Claude Desktop and other MCP clients) use the reader through four tools: `search`, `place`, `reviews` (without reviewer names) and `photos` (Google photos returned as images, e.g. to read a menu page). It runs locally with your Chrome; no API key or account.
+`gmaps-mcp` lets AI agents (Claude Code, Claude Desktop and other MCP clients) use the reader through four tools: `search`, `place`, `reviews` (without reviewer names) and `photos` (Google photos returned as images, e.g. to read a menu page). It runs locally with your Chrome; no API key. Sign the profile in once with `gmaps-login` for the full view.
 
 ```bash
 # Claude Code
@@ -133,22 +136,22 @@ Claude Desktop and other clients, every tool argument and the limits (`MAPS_MCP_
 | Environment variable | Option | Purpose |
 |---|---|---|
 | `MAPS_CHROME_PATH` | `executablePath` | Chrome or Chromium binary |
-| `MAPS_PROFILE_DIR` | `userDataDir` | Persistent, private browser profile (absolute path). **Recommended:** it keeps the full view. |
+| `MAPS_PROFILE_DIR` | `userDataDir` | Persistent, private browser profile (absolute path). **Recommended:** it keeps the session (`gmaps-login`) and the full view. |
 
 Command-line flags and JSON request fields take priority over the environment. The MCP server adds its own limits ([MCP server](docs/mcp.md)).
 
-### Full view without an account
+### Full view and signing in
 
-Google Maps shows anonymous browsers either a **limited view** (no Menu tab, no menu items or prices, often no menu album, fewer details) or the **full view**. In our tests the browser's anonymous id cookie decided it: `__Secure-ENID` in the EU, `NID` elsewhere. Google issues each id in one of the two classes and the id keeps it (ENID about 13 months, NID about 6). It works from any IP address, but only with a user agent of the same operating system. Signing in does not change the class, and a signed-in session returned exactly the same data as the anonymous full view.
+Google Maps shows a place page either as a **limited view** (no Menu tab, no menu items or prices, often no menu album, fewer details) or as the **full view**. Until October 2026 the browser's anonymous id cookie decided it (`__Secure-ENID` in the EU, `NID` elsewhere) and about half of all new profiles got the full view; **since late October 2026 every anonymous browser gets the limited view**, while a browser signed in to a Google account still gets the full view.
 
-- **Use a persistent profile** (`MAPS_PROFILE_DIR` / `userDataDir`). It keeps the anonymous id.
-- **Limited view?** `readPlace` reloads the place once. If the profile still holds a limited id, it brings in a full-view id from up to six fresh temporary profiles. If none gets one, the place comes back as `limited_view` with `view: 'limited'`, and later places in that browser are not retried.
-- **Run `gmaps-view` hourly** (cron). It reports `"view"`, repairs a limited view, and exits with `0` only for the full view.
-- **No account, no cookie files.** The reader never signs in and loads no cookies. A signed-in session returned the same data in our tests, and Google revokes sessions whose cookies are moved to another machine (within minutes to two hours).
+- **Use a persistent profile** (`MAPS_PROFILE_DIR` / `userDataDir`). It keeps the session and the anonymous id.
+- **Sign in once with `gmaps-login`.** It opens an ordinary Chrome window on the profile; sign in, and the window closes when Maps opens. On a server without a screen it runs the window on a virtual display (`xvfb-run`) and you drive it from your computer through an SSH tunnel and `chrome://inspect`. Create the session on the machine that runs the reader: Chrome binds Google sessions to the device, and sessions copied from another computer are signed out within hours. Use a dedicated account.
+- **Run `gmaps-view --no-repair` hourly** (cron). It reports `"view"` and `"account"`, keeps the session fresh, and exits with `0` only for the full view. Without `--no-repair` it also repairs a limited *anonymous* view (reload, then a full-view id from up to six temporary profiles, which finds none since October 2026).
+- **No cookie files.** The reader never loads exported cookies; the session lives only in the profile folder.
 
-Details, measurements and tips: [docs/full-view.md](docs/full-view.md).
+The procedure, measurements and tips: [docs/sign-in.md](docs/sign-in.md) and [docs/full-view.md](docs/full-view.md).
 
-Chrome or Chromium is needed in every case. It runs headless, so no desktop is required; on Linux run it as a normal user, not root. Keep the profile folder private.
+Chrome or Chromium is needed in every case. Reading runs headless, so no desktop is required; on Linux run it as a normal user, not root. Keep the profile folder private.
 
 ### Limitations
 
@@ -184,7 +187,7 @@ Issues and pull requests are welcome.
 
 ### İçindekiler
 
-[Özellikler](#özellikler) · [Kurulum](#kurulum) · [Hızlı başlangıç](#hızlı-başlangıç) · [Dokümantasyon](#dokümantasyon) · [API](#api-1) · [Komut satırı](#komut-satırı) · [MCP sunucusu](#mcp-sunucusu) · [Yapılandırma](#yapılandırma) · [Hesapsız tam görünüm](#hesapsız-tam-görünüm) · [Sınırlar](#sınırlar) · [Sorumluluk reddi](#sorumluluk-reddi)
+[Özellikler](#özellikler) · [Kurulum](#kurulum) · [Hızlı başlangıç](#hızlı-başlangıç) · [Dokümantasyon](#dokümantasyon) · [API](#api-1) · [Komut satırı](#komut-satırı) · [MCP sunucusu](#mcp-sunucusu) · [Yapılandırma](#yapılandırma) · [Tam görünüm ve oturum açma](#tam-görünüm-ve-oturum-açma) · [Sınırlar](#sınırlar) · [Sorumluluk reddi](#sorumluluk-reddi)
 
 ### Özellikler
 
@@ -193,7 +196,7 @@ Issues and pull requests are welcome.
 - **Hakkında bilgileri:** Google veriyorsa işletme açıklaması; erişilebilirlik, hizmet, atmosfer ve ödeme gibi kategorilere ayrılmış özellikler.
 - **Menü albümünün tamamı.** Genel bakıştaki menü şeridi "Fotoğraf 1/12" yazsa da yalnız birkaç küçük resim gösterir; bu yüzden albüm tam ekran fotoğraf görüntüleyicisinden okunur. Her fotoğraf tam boy adresi, **orijinal boyutu** ve **çekildiği ay** (`taken_at`, ör. `2026-01`) ile gelir. Eski fotoğraflarda güncel olmayan fiyatlar varsa en yeni menüyü seçebilirsiniz.
 - Menü sekmesinden kategorileriyle **ürünler ve fiyatlar**.
-- **Hesapsız tam görünüm.** Google oturumsuz tarayıcılara mekân sayfasının ya sınırlı ya da tam sürümünü gösterir. Kalıcı bir profil tam görünümü korur, okuyucu sınırlı görünümü kendisi onarır; her sonuç hangi görünümü aldığını söyler (`view`). Google hesabı bir şey kazandırmaz: testlerimizde oturum açık bir profil birebir aynı veriyi döndürdü. Bkz. [Hesapsız tam görünüm](docs/tr/full-view.md).
+- **Tek oturum açmayla tam görünüm.** Ekim 2026 sonundan beri Google oturumsuz tarayıcılara yalnız sınırlı mekân sayfasını gösteriyor (Menü sekmesi yok, ürün yok, çoğu zaman menü albümü yok). `gmaps-login`, okuyucunun profilinde sıradan bir Chrome penceresinde bir kez oturum açmanızı sağlar; ekranı olmayan bir sunucuda da (SSH tüneli + `chrome://inspect`). Sonrasında headless okuyucu tam görünümü alır ve her sonuç hangi görünümü ve hesap durumunu aldığını söyler (`view`, `account`). Bkz. [Oturum açma](docs/tr/sign-in.md) ve [Tam görünüm](docs/tr/full-view.md).
 - **Ayrıntılı, tarihli yorumlar (isteğe bağlı):** yorumcu, yıldız (yalnız yıldız verilenler dahil), tam metin, işletme yanıtı, beğeni, yorum fotoğrafları, alt puanlar ve diğer detaylar (`Yiyecek: 5`, kişi başı fiyat …), düzenleme ve "Google tarafından çevrildi" işaretleri. Her yorumun **kesin yayın tarihi** (`date_iso`), Google'ın sayfaya gönderdiği veriden okunur ve ekrandaki "2 ay önce" etiketiyle doğrulanır; okunamazsa yaklaşık tarih (`date_estimate`) ve hassasiyeti verilir. İsteğe bağlı **en yeniden eskiye** sıralama (`reviewSort: 'newest'`); liste sonuna kadar sayfalandığı için bütün yorumlar okunabilir.
 - **Tek bağlantıyla sorgu:** Google Maps bağlantısını `readPlaceUrl` ya da `gmaps-place --url ...` komutuna verin — `maps.app.goo.gl` paylaşım bağlantıları, tüm Google ülke alan adları (`google.com.tr` …), `?cid=` bağlantıları ve Menü/Yorumlar sekmesi açıkken kopyalanan bağlantılar kabul edilir.
 - **Yapay zekâ ajanları için MCP sunucusu** (`gmaps-mcp`): Claude Code, Claude Desktop ve diğer MCP istemcileri mekân arayabilir; bilgileri, menüleri ve yorumları okuyabilir; fotoğraflara bakabilir, ör. menü sayfası okumak için. Bkz. [MCP sunucusu](docs/tr/mcp.md).
@@ -219,7 +222,7 @@ export MAPS_CHROME_PATH=/usr/bin/google-chrome   # ya da /usr/bin/chromium
 ```js
 import { launchBrowser, newMapsPage, searchPlaces, readPlace } from 'gmaps-place-reader';
 
-// Kalıcı bir profil Google'ın tam görünümünü korur; hesap ya da çerez gerekmez.
+// gmaps-login ile bir kez oturum açılmış kalıcı profil Google'ın tam görünümünü korur.
 const browser = await launchBrowser({ userDataDir: '/mutlak/yol/gmaps-profile' });
 try {
   const page = await newMapsPage(browser);
@@ -239,7 +242,7 @@ try {
 
 ### Dokümantasyon
 
-Ayrıntılı dokümantasyon [`docs/tr/`](docs/tr/README.md) altında: [hesapsız tam görünüm](docs/tr/full-view.md) · [API başvurusu](docs/tr/api.md) · [veri başvurusu](docs/tr/data.md) (her alan) · [komut satırı](docs/tr/cli.md) · [MCP sunucusu](docs/tr/mcp.md) · [durumlar, uyarılar ve sorun giderme](docs/tr/troubleshooting.md).
+Ayrıntılı dokümantasyon [`docs/tr/`](docs/tr/README.md) altında: [tam görünüm için oturum açma](docs/tr/sign-in.md) · [tam görünüm](docs/tr/full-view.md) · [API başvurusu](docs/tr/api.md) · [veri başvurusu](docs/tr/data.md) (her alan) · [komut satırı](docs/tr/cli.md) · [MCP sunucusu](docs/tr/mcp.md) · [durumlar, uyarılar ve sorun giderme](docs/tr/troubleshooting.md).
 
 ### API
 
@@ -255,20 +258,23 @@ Ayrıntılı dokümantasyon [`docs/tr/`](docs/tr/README.md) altında: [hesapsız
 | `scan(browser, { location, keyword?, limit?, known?, maxImages?, maxMenuImages?, includeReviews?, maxReviews?, maxReviewScrolls? })` | Arama ve detay tek çağrıda; istenirse yorumları da çeker ve normalize kayıtlarla `{ status, items, skipped_known }` döner. `known` listesindeki işletmeler (`{ source: 'google_maps_browser', source_id }`) atlanır. |
 | `toObservation(place, detail)` | `readPlace` sonucunu `assets`, `menu_assets` ve istenirse yorumları içeren tek kayda (`schema_version: 'gmaps.place.v1'`) çevirir. |
 
-Yardımcılar: `normalizePlaceUrl(url)` (tarayıcı açmadan bağlantıyı denetler), `fullImageUrl(url)` (Google fotoğraf adresinin büyük hali), `placeIdentity(url)`, `pageStatus(page)`, `passConsent(page)`, `parseRelativeAge(label)`, `estimateReviewDate(label)`, `checkView(browser, url?)` (`{ view, renewed }`, sınırlı görünümü onarır).
-Alt yollar: `gmaps-place-reader/media`, `/details`, `/reviews`.
+Yardımcılar: `normalizePlaceUrl(url)` (tarayıcı açmadan bağlantıyı denetler), `fullImageUrl(url)` (Google fotoğraf adresinin büyük hali), `placeIdentity(url)`, `pageStatus(page)`, `passConsent(page)`, `parseRelativeAge(label)`, `estimateReviewDate(label)`, `checkView(browser, url?, { repair? })` (`{ view, renewed, account }`), `accountState(page)`; `gmaps-place-reader/login` altında `signIn(options)` (`gmaps-login` akışı).
+Alt yollar: `gmaps-place-reader/media`, `/details`, `/reviews`, `/login`, `/mcp`.
 
 Yorum seçenekleri: `includeReviews` (varsayılan `false`), `maxReviews` (100, en fazla 10.000), `maxReviewScrolls` (25, en fazla 1.000 — her adım yaklaşık 10 yorum yükler), `reviewSort` (`relevant` · `newest` · `highest` · `lowest`). Yorum alanları: `review_id`, `author`, `author_summary`, `rating`, `text`, `date_label`, `date_iso`, `date_estimate`, `date_precision` (`exact`, `day`, `week`, `month`, `year` …), `edited`, `edited_estimate` (düzenlenmiş yorumun yaklaşık düzenlenme tarihi), `translated`, `photos`, `owner_response`, `likes`, `language`, `details` (yorumun altındaki yapılandırılmış satırlar: `{ name: 'Yiyecek', value: '5' }` gibi alt puanlar ve `{ name: 'Kişi başı fiyat', value: '₺400–600' }` gibi satırlar). `reviews` sonucu ayrıca `sort_label` ve `sort_applied` bildirir; istenen sıralama seçilemezse `warnings` içinde `REVIEW_SORT_NOT_APPLIED` olur.
 
-Her sonuçta `view` (`full` · `limited` · `unknown`) bulunur. Her fonksiyon, seçenek ve alan: [docs/tr/api.md](docs/tr/api.md), [docs/tr/data.md](docs/tr/data.md).
+Her sonuçta `view` (`full` · `limited` · `unknown`) ve `account` (`signed_in` · `signed_out` · `unknown`) bulunur. Her fonksiyon, seçenek ve alan: [docs/tr/api.md](docs/tr/api.md), [docs/tr/data.md](docs/tr/data.md).
 
 **Durumlar:** `ok`, `incomplete` (bazı kısımlar okunamadı, `warnings`e bakın), `limited_view`, `auth_required`, `consent_required`, `blocked`, `unavailable`. Sık uyarılar: `MENU_PHOTOS_UNAVAILABLE` (menü ürünleri okundu ama menü fotoğraf albümü açılamadı), `REVIEWS_UNAVAILABLE`, `REVIEW_SORT_NOT_APPLIED`, `LIMITED_VIEW` ve sizin koyduğunuz sınır bir listeyi durdurduysa `…_LIMIT_OR_SCROLL_LIMIT`.
 
 ### Komut satırı
 
-Komutlar stdout'a tek bir JSON yanıt yazar (hata durumunda çıkış kodu `2` ve `error_code`). `MAPS_PROFILE_DIR`'i kalıcı bir profile ayarlayın; hesap ya da çerez kullanılmaz. Bütün bayraklar ve alanlar: [docs/tr/cli.md](docs/tr/cli.md).
+Komutlar stdout'a tek bir JSON yanıt yazar (hata durumunda çıkış kodu `2` ve `error_code`). `MAPS_PROFILE_DIR`'i kalıcı bir profile ayarlayın ve `gmaps-login` ile bir kez oturum açın; çerez dosyası kullanılmaz. Bütün bayraklar ve alanlar: [docs/tr/cli.md](docs/tr/cli.md).
 
 ```bash
+# Bir kez: profilde oturum açın (pencere açılır; sunucuda --port 9222 ekleyip SSH tüneli kullanın, bkz. docs/tr/sign-in.md)
+MAPS_PROFILE_DIR=/mutlak/ozel/profil npx gmaps-login
+
 # Linkle tek mekân: detaylar, menü, fotoğraflar ve tarihleriyle en yeni 300 yorum
 MAPS_PROFILE_DIR=/mutlak/ozel/profil npx gmaps-place --url "https://maps.app.goo.gl/mekan-linki" --reviews --sort newest --max-reviews 300 --max-review-scrolls 40
 
@@ -276,13 +282,13 @@ MAPS_PROFILE_DIR=/mutlak/ozel/profil npx gmaps-place --url "https://maps.app.goo
 echo '{"schema_version":"gmaps.scan.request.v1","location":"Kadıköy, İstanbul","keyword":"kafe","limit":5}' \
   | MAPS_PROFILE_DIR=/mutlak/ozel/profil npx gmaps-scan
 
-# Profili tam görünümde tutmak (cron, saatte bir): çıkış kodu 0 = tam görünüm, 3 = sınırlı
-MAPS_PROFILE_DIR=/mutlak/ozel/profil npx gmaps-view
+# Profili denetlemek (cron, saatte bir): çıkış kodu 0 = tam görünüm, 3 = sınırlı; görünümü ve hesabı bildirir
+MAPS_PROFILE_DIR=/mutlak/ozel/profil npx gmaps-view --no-repair
 ```
 
 ### MCP sunucusu
 
-`gmaps-mcp`, yapay zekâ ajanlarının (Claude Code, Claude Desktop ve diğer MCP istemcileri) okuyucuyu dört araçla kullanmasını sağlar: `search`, `place`, `reviews` (yorumcu adları olmadan) ve `photos` (Google fotoğraflarını görsel olarak döndürür, ör. menü sayfası okumak için). Kendi Chrome'unuzla yerelde çalışır; API anahtarı ya da hesap gerekmez.
+`gmaps-mcp`, yapay zekâ ajanlarının (Claude Code, Claude Desktop ve diğer MCP istemcileri) okuyucuyu dört araçla kullanmasını sağlar: `search`, `place`, `reviews` (yorumcu adları olmadan) ve `photos` (Google fotoğraflarını görsel olarak döndürür, ör. menü sayfası okumak için). Kendi Chrome'unuzla yerelde çalışır; API anahtarı gerekmez. Tam görünüm için profilde `gmaps-login` ile bir kez oturum açın.
 
 ```bash
 # Claude Code
@@ -296,22 +302,22 @@ Claude Desktop ve diğer istemciler, araçların bütün argümanları ve sını
 | Ortam değişkeni | Seçenek | Amaç |
 |---|---|---|
 | `MAPS_CHROME_PATH` | `executablePath` | Chrome ya da Chromium dosyası |
-| `MAPS_PROFILE_DIR` | `userDataDir` | Kalıcı, özel tarayıcı profili (mutlak yol). **Önerilir:** tam görünümü korur. |
+| `MAPS_PROFILE_DIR` | `userDataDir` | Kalıcı, özel tarayıcı profili (mutlak yol). **Önerilir:** oturumu (`gmaps-login`) ve tam görünümü korur. |
 
 Komut satırı bayrakları ve JSON istek alanları ortam değişkenlerinden önce gelir. MCP sunucusunun kendi sınırları vardır ([MCP sunucusu](docs/tr/mcp.md)).
 
-### Hesapsız tam görünüm
+### Tam görünüm ve oturum açma
 
-Google Maps oturumsuz tarayıcılara ya **sınırlı görünüm** (Menü sekmesi yok, ürün ve fiyat yok, çoğu zaman menü albümü yok, daha az bilgi) ya da **tam görünüm** gösterir. Testlerimizde bunu tarayıcının anonim kimlik çerezi belirledi: AB'de `__Secure-ENID`, başka yerlerde `NID`. Google her kimliği iki sınıftan birinde verir ve kimlik o sınıfta kalır (ENID yaklaşık 13 ay, NID yaklaşık 6 ay). Her IP adresinden çalışır, ama yalnız aynı işletim sisteminin user agent'ıyla. Oturum açmak sınıfı değiştirmez; oturum açık bir profil, oturumsuz tam görünümle birebir aynı veriyi döndürdü.
+Google Maps bir mekân sayfasını ya **sınırlı görünüm** (Menü sekmesi yok, ürün ve fiyat yok, çoğu zaman menü albümü yok, daha az bilgi) ya da **tam görünüm** olarak gösterir. Ekim 2026'ya kadar bunu tarayıcının anonim kimlik çerezi belirliyordu (AB'de `__Secure-ENID`, başka yerlerde `NID`) ve yeni profillerin yaklaşık yarısı tam görünüm alıyordu; **Ekim 2026 sonundan beri her oturumsuz tarayıcı sınırlı görünüm alıyor**, Google hesabıyla oturum açmış tarayıcı ise tam görünümü almaya devam ediyor.
 
-- **Kalıcı bir profil kullanın** (`MAPS_PROFILE_DIR` / `userDataDir`). Anonim kimlik orada saklanır.
-- **Sınırlı görünüm mü geldi?** `readPlace` mekânı bir kez yeniden yükler. Profilde hâlâ sınırlı bir kimlik varsa, en çok altı yeni geçici profilden tam görünüm veren bir kimlik getirir. Hiçbiri alamazsa mekân `limited_view` ve `view: 'limited'` ile döner; o tarayıcıdaki sonraki mekânlar için yeniden denenmez.
-- **`gmaps-view`'u saatte bir çalıştırın** (cron). `"view"` bildirir, sınırlı görünümü onarır ve yalnız tam görünümde `0` ile çıkar.
-- **Hesap yok, çerez dosyası yok.** Okuyucu hiçbir zaman oturum açmaz ve çerez yüklemez. Testlerimizde oturum açık bir profil aynı veriyi döndürdü; Google da çerezleri başka bir makineye taşınan oturumları iptal ediyor (birkaç dakika ile iki saat arasında).
+- **Kalıcı bir profil kullanın** (`MAPS_PROFILE_DIR` / `userDataDir`). Oturum ve anonim kimlik orada saklanır.
+- **`gmaps-login` ile bir kez oturum açın.** Profilde sıradan bir Chrome penceresi açar; oturum açın, Maps açıldığında pencere kapanır. Ekranı olmayan sunucuda pencereyi sanal ekranda (`xvfb-run`) çalıştırır; siz onu bilgisayarınızdan SSH tüneli ve `chrome://inspect` ile yönetirsiniz. Oturumu okuyucunun çalıştığı makinede oluşturun: Chrome, Google oturumlarını cihaza bağlar; başka bilgisayardan kopyalanan oturumlar saatler içinde kapatılır. Okuyucuya ayrılmış bir hesap kullanın.
+- **`gmaps-view --no-repair`'i saatte bir çalıştırın** (cron). `"view"` ve `"account"` bildirir, oturumu canlı tutar ve yalnız tam görünümde `0` ile çıkar. `--no-repair` olmadan sınırlı *oturumsuz* görünümü de onarmayı dener (yeniden yükleme, sonra en çok altı geçici profilden tam görünümlü kimlik; Ekim 2026'dan beri bulamıyor).
+- **Çerez dosyası yok.** Okuyucu dışa aktarılmış çerez yüklemez; oturum yalnız profil klasöründe yaşar.
 
-Ayrıntılar, ölçümler ve ipuçları: [docs/tr/full-view.md](docs/tr/full-view.md).
+Süreç, ölçümler ve ipuçları: [docs/tr/sign-in.md](docs/tr/sign-in.md) ve [docs/tr/full-view.md](docs/tr/full-view.md).
 
-Her durumda Chrome ya da Chromium gerekir. Görünmez modda çalıştığı için masaüstü gerekmez; Linux'ta root olarak değil, normal bir kullanıcıyla çalıştırın. Profil klasörünü gizli tutun.
+Her durumda Chrome ya da Chromium gerekir. Okuma görünmez modda çalıştığı için masaüstü gerekmez; Linux'ta root olarak değil, normal bir kullanıcıyla çalıştırın. Profil klasörünü gizli tutun.
 
 ### Sınırlar
 
