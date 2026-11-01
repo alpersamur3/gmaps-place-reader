@@ -10,7 +10,7 @@ Her sonuç neyi okuyabildiğini ve neyi okuyamadığını söyler. Önce `status
 |---|---|---|
 | `ok` | İstenen her şey okundu. Koyduğunuz sınırlar bir listeyi yine de durdurmuş olabilir (`…_LIMIT_OR_SCROLL_LIMIT`). | — |
 | `incomplete` | Mekân tam görünümde okundu ama bir kısım başarısız oldu; `warnings`'e bakın. | Genellikle geçicidir; mekânı yeniden okuyun. |
-| `limited_view` | Google sınırlı görünüm verdi ve onarılamadı ([Tam görünüm](full-view.md)). Menü ürünleri, albüm ve bazı bilgiler eksik. | Kalıcı profil kullanın ve `gmaps-view` çalıştırın. User agent'ın işletim sisteminin, profilin oluşturulduğu sistemle aynı olduğundan emin olun. |
+| `limited_view` | Google sınırlı görünüm verdi ve onarılamadı ([Tam görünüm](full-view.md)). Menü ürünleri, albüm ve bazı bilgiler eksik. Ekim 2026 sonundan beri Google bunu her anonim tarayıcıya veriyor. | Kalıcı profil kullanın ve `gmaps-view` çalıştırın. User agent'ın işletim sisteminin, profilin oluşturulduğu sistemle aynı olduğundan emin olun. |
 | `consent_required` | AB onay sayfası geçilemedi ("Tümünü reddet" düğmesi yok). | Sayfaya görünür bir tarayıcıyla bakın (`headless: false`). |
 | `auth_required` | Google mekân yerine oturum açma sayfası gösterdi. | Seyrek. Mekânı yeniden okuyun; tekrarlarsa yeni bir profille başlayın. |
 | `blocked` | "Olağan dışı trafik" / CAPTCHA. Okuyucu bunu asla aşmaya çalışmaz. | Yavaşlayın, ara verin, çalıştırma başına daha az mekân okuyun. |

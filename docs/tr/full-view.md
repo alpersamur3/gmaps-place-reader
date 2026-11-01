@@ -15,7 +15,9 @@ Google Maps, oturumsuz tarayıcılara bir mekân sayfasının iki sürümünden 
 | Menü fotoğraf albümü | nadiren, çoğu zaman tek fotoğraf | var, her fotoğrafın çekildiği ayla |
 | Yorumlar sekmesi | bazen yok | var |
 
-Tam görünüm için Google hesabı gerekmez. Aşağıdaki her şey Ekim 2026'da bu kütüphaneyle, AB'deki (Finlandiya) bir sunucudan ve Türkiye'deki bir bilgisayardan ölçüldü.
+Tam görünüm için Google hesabı gerekmez. Aşağıdaki her şey Ekim 2026 başında bu kütüphaneyle, AB'deki (Finlandiya) bir sunucudan ve Türkiye'deki bir bilgisayardan ölçüldü.
+
+> **Güncelleme, 31 Ekim 2026:** Google şu anda her anonim tarayıcıya sınırlı görünüm veriyor. Yeni kimliklerin hepsi sınırlıydı (Türkiye'de ve AB'de 8'de 8); Ekim başında tam görünüm alan bir kimlik artık sınırlı görünüm alıyor; hiçbir otomasyon olmadan elle başlatılan bir Chrome da öyle. Bu yüzden okuyucunun kurtarması tam kimlik bulamıyor: mekânlar `view: 'limited'` ve `LIMITED_VIEW` uyarısıyla döner, her tarayıcı ilk denemesinden sonra yeniden denemez (yaklaşık bir dakika; `readPlace` seçeneği `recoverView: false` bunu atlar). Google aynısını Şubat 2026'da oturumsuz kullanıcılara yapmış ve yaklaşık bir hafta sonra geri almıştı; tam görünümün ne zaman döndüğünü görmek için `gmaps-view` çalıştırın.
 
 ## Görünümü ne belirliyor
 

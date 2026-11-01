@@ -15,7 +15,9 @@ Google Maps shows anonymous browsers one of two versions of a place page:
 | Menu photo album | rarely, often a single photo | yes, with the month each photo was taken |
 | Reviews tab | sometimes missing | yes |
 
-No Google account is needed for the full view. Everything below was measured with this library in October 2026, from a server in the EU (Finland) and from a computer in Turkey.
+No Google account is needed for the full view. Everything below was measured with this library in early October 2026, from a server in the EU (Finland) and from a computer in Turkey.
+
+> **Update, 31 October 2026:** Google currently serves the limited view to every anonymous browser. All new ids were limited (8 of 8, in Turkey and in the EU), an id that had the full view in early October now gets the limited view, and so does a Chrome started by hand without any automation. The reader's recovery therefore finds no full id: places come back with `view: 'limited'` and the `LIMITED_VIEW` warning, and each browser stops trying after its first attempt (about a minute; `readPlace` option `recoverView: false` skips it). Google did the same to signed-out users in February 2026 and reverted it after about a week; run `gmaps-view` to see when the full view returns.
 
 ## What decides the view
 

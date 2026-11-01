@@ -10,7 +10,7 @@ Every result says what it could and could not read. Check `status` and `view` fi
 |---|---|---|
 | `ok` | Everything that was requested was read. Limits you set may still have stopped a list (`…_LIMIT_OR_SCROLL_LIMIT`). | — |
 | `incomplete` | The place was read in the full view, but a part failed; see `warnings`. | Usually transient; read the place again. |
-| `limited_view` | Google served the limited view and it could not be repaired ([Full view](full-view.md)). Menu items, the album and some details are missing. | Use a persistent profile and run `gmaps-view`. Make sure the user agent's operating system matches the one the profile was created on. |
+| `limited_view` | Google served the limited view and it could not be repaired ([Full view](full-view.md)). Menu items, the album and some details are missing. Since late October 2026 Google serves it to every anonymous browser. | Use a persistent profile and run `gmaps-view`. Make sure the user agent's operating system matches the one the profile was created on. |
 | `consent_required` | The EU consent page could not be passed (no "Reject all" button). | Check the page in a visible browser (`headless: false`). |
 | `auth_required` | Google showed a sign-in page instead of the place. | Rare. Read the place again; if it repeats, start with a fresh profile. |
 | `blocked` | "Unusual traffic" / CAPTCHA. The reader never tries to bypass it. | Slow down, pause, read fewer places per run. |
